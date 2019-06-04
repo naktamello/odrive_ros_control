@@ -1,0 +1,11 @@
+<library path="lib/libodrive_hardware_sim">
+
+    <class
+      name="odrive_ros_control/ODriveHardwareSim"
+      type="odrive_ros_control::ODriveHardwareSim"
+      base_class_type="gazebo_ros_control::RobotHWSim">
+      <description>
+      Gazebo interface for ODrive motor driver (odriverobotics.com).
+      </description>
+    </class>
+</library>
