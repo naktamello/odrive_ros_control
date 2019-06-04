@@ -3,18 +3,15 @@
  */
 #include <odrive_ros_control/odrive_hardware_interface.h>
 #include <boost/format.hpp>
+#include <boost/shared_ptr.hpp>
 
 namespace odrive_hardware_interface{
 
 ODriveHardwareInterface::ODriveHardwareInterface()
-//   joint_position_(6, 0.0), joint_velocity_(6, 0.0), joint_effort_(6, 0.0),
-//   joint_position_command_(6, 0.0), joint_velocity_command_(6, 0.0), joint_effort_command_(6, 0.0),
-//   n_dof_(6)
 {
   if (!nh_.getParam("/odrive/hardware_interface/joints", joint_names_)){
-      std::string err_msg("You must load joint names to '/odrive/hardware_interface/joints' on param server.");
-      ROS_ERROR(err_msg.c_str());
-      throw std::runtime_error(err_msg.c_str());
+      ROS_FATAL_STREAM_NAMED("odrive_ros_control","You must load joint names to '/odrive/hardware_interface/joints' on param server.");
+      ros::shutdown();
   }
   n_dof_ = joint_names_.size();
   joint_position_.resize(n_dof_);
@@ -47,7 +44,8 @@ return true;
 }
 
 bool ODriveHardwareInterface::write(const ros::Time time, const ros::Duration period){
-  ROS_DEBUG_STREAM(boost::format("ODriveHardwareInterface::write=%1% /  %2%")%joint_position_command_[0]%joint_velocity_command_[0]);
+  command_transport_->send(joint_position_command_, joint_velocity_command_);
+  // ROS_DEBUG_STREAM(boost::format("ODriveHardwareInterface::write=%1% /  %2%")%joint_position_command_[0]%joint_velocity_command_[0]);
 return true;
 }
 
@@ -56,7 +54,17 @@ void ODriveHardwareInterface::configure(){
 }
 
 void ODriveHardwareInterface::start(){
-
+  try{
+    transport_loader_.reset
+    (new pluginlib::ClassLoader<odrive_ros_control::transport::CommandTransport>
+      ("odrive_ros_control", "odrive_ros_control::transport::CommandTransport"));
+      command_transport_ = transport_loader_->createInstance("odrive_ros_control/UartTransport");
+      ROS_DEBUG_STREAM("UartTransport loaded");
+  }
+  catch(pluginlib::LibraryLoadException &ex){
+    ROS_FATAL_STREAM_NAMED("odrive_ros_control", "Failed to load odrive transport plugin: " <<ex.what());
+    ros::shutdown();
+  }
 }
 
 }

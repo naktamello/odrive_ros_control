@@ -62,6 +62,9 @@ target_link_libraries(odrive_hardware_interface ${catkin_LIBRARIES} ${GAZEBO_LIB
 add_library(odrive_hardware_sim src/odrive_hardware_sim.cpp)
 target_link_libraries(odrive_hardware_sim ${catkin_LIBRARIES} ${GAZEBO_LIBRARIES} ${Boost_LIBRARIES})
 
+add_library(odrive_transport_uart src/odrive_transport_uart.cpp)
+target_link_libraries(odrive_transport_uart ${catkin_LIBRARIES} ${Boost_LIBRARIES})
+
 add_executable(odrive_hardware_interface_node src/odrive_hardware_interface_node.cpp)
 target_link_libraries(odrive_hardware_interface_node odrive_hardware_interface)
 
@@ -87,11 +90,12 @@ install(
   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   RUNTIME DESTINATION ${CATKIN_GLOBAL_BIN_DESTINATION}
 )
-
-# install(
-  # TARGETS odrive_hardware_sim
-  # LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-# )
+install(
+  TARGETS odrive_transport_uart
+  ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+  LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+  RUNTIME DESTINATION ${CATKIN_GLOBAL_BIN_DESTINATION}
+)
 
 install(
   DIRECTORY include/
@@ -100,6 +104,10 @@ install(
 )
 
 install(FILES odrive_hardware_sim_plugin.xml
+  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
+)
+
+install(FILES odrive_transport_plugin.xml
   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
 )
 

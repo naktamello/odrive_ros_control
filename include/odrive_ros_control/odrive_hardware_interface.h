@@ -9,9 +9,11 @@
 #include <string>
 // ROS
 #include <ros/ros.h>
+#include <pluginlib/class_loader.h>
 #include <std_msgs/String.h>
 #include <realtime_tools/realtime_publisher.h>
 #include <controller_manager/controller_manager.h>
+#include <odrive_ros_control/transport_interface.h>
 #include <hardware_interface/joint_command_interface.h>
 #include <hardware_interface/posvel_command_interface.h>
 #include <hardware_interface/joint_state_interface.h>
@@ -43,9 +45,10 @@ protected:
   std::vector<double> joint_effort_command_;
 
   hardware_interface::JointStateInterface joint_state_interface_;
-//   hardware_interface::PositionJointInterface position_joint_interface_;
   hardware_interface::PosVelJointInterface posvel_joint_interface_;
-//   hardware_interface::
+
+  boost::shared_ptr<pluginlib::ClassLoader<odrive_ros_control::transport::CommandTransport> > transport_loader_;
+  boost::shared_ptr<odrive_ros_control::transport::CommandTransport> command_transport_;
 };
 
 }
