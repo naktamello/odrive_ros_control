@@ -8,6 +8,12 @@
 
 namespace odrive_ros_control
 {
+  enum AxisNumber
+  {
+    NONE = -1,
+    AXIS0 = 0,
+    AXIS1 = 1
+  };
 namespace transport
 {
 enum TransportType
