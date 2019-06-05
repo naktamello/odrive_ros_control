@@ -8,11 +8,12 @@
 
 namespace odrive_ros_control
 {
-  enum AxisNumber
+  enum class AxisNumber
   {
     NONE = -1,
     AXIS0 = 0,
-    AXIS1 = 1
+    AXIS1 = 1,
+    NUM_AXES
   };
 namespace transport
 {
@@ -32,6 +33,7 @@ public:
     nh_ptr_ = std::make_shared<ros::NodeHandle>(nh);
     param_namepsace_ = param_namespace;
     joint_names_ = joint_names;
+    positions_.resize(joint_names_.size());
   };
   virtual ~CommandTransport()
   {
@@ -43,6 +45,7 @@ protected:
   std::shared_ptr<ros::NodeHandle> nh_ptr_;
   std::string param_namepsace_;
   std::vector<std::string> joint_names_;
+  std::vector<double> positions_;
 };
 }
 }

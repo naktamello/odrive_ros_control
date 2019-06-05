@@ -11,25 +11,19 @@
 #include <boost/format.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/thread.hpp>
-#include <unordered_map>
 #include <iostream>
+#include <unordered_map>
 
 namespace odrive_ros_control
 {
 namespace transport
 {
-/*
- * SerialDevice class is adaptation of async serial port example by Jeff Gray(2008).
- * http://boost.2283326.n4.nabble.com/Simple-serial-port-demonstration-with-boost-asio-asynchronous-I-O-td2582657.html
- */
 class SerialDevice
 {
 public:
-  // SerialDevice(boost::asio::io_service& io_service, unsigned int baud, const std::string& device)
-    // : ok_(true), io_service_(io_service), serial_port_(io_service, device)
-  SerialDevice(unsigned int baud, const std::string& device)
-    : ok_(true)
+  SerialDevice(unsigned int baud, const std::string& device) : ok_(true)
   {
+    out_buffer_.reserve(static_cast<int>(AxisNumber::NUM_AXES));
     io_service_ = std::make_shared<boost::asio::io_service>();
     serial_port_ = std::unique_ptr<boost::asio::serial_port>(new boost::asio::serial_port(*io_service_, device));
     if (!serial_port_->is_open())
@@ -41,6 +35,17 @@ public:
     serial_port_->set_option(baud_option);
     boost::thread t(boost::bind(&boost::asio::io_service::run, io_service_));
     start_reading();
+  }
+
+  void load_buffer(std::string&& msg)
+  {
+    out_buffer_.emplace_back(msg);
+  }
+
+  void write_buffer()
+  {
+    write_async(std::accumulate(out_buffer_.begin(), out_buffer_.end(), std::string()));
+    out_buffer_.clear();
   }
 
   void write_async(std::string&& msg)
@@ -55,12 +60,12 @@ public:
   }
 
 private:
-
   void start_reading(void)
   {
     serial_port_->async_read_some(boost::asio::buffer(io_buffer_, max_read_length),
-                                 boost::bind(&SerialDevice::read_async_complete, this, boost::asio::placeholders::error,
-                                             boost::asio::placeholders::bytes_transferred));
+                                  boost::bind(&SerialDevice::read_async_complete, this,
+                                              boost::asio::placeholders::error,
+                                              boost::asio::placeholders::bytes_transferred));
   }
 
   void read_async_complete(const boost::system::error_code& error, size_t bytes_transferred)
@@ -91,13 +96,14 @@ private:
     }
     else
     {
+      ROS_DEBUG_STREAM("write_async error");
       terminate(error);
     }
     // ROS_DEBUG_STREAM("write_async_complete");
   }
 
   void terminate(const boost::system::error_code& error)
-  { 
+  {
     if (error == boost::asio::error::operation_aborted)
       return;
     ROS_FATAL_NAMED("odrive_ros_control", (std::string("could not open serial port: ") + error.message()).c_str());
@@ -112,12 +118,13 @@ private:
   std::shared_ptr<boost::asio::io_service> io_service_;
   char io_buffer_[max_read_length];
   boost::circular_buffer<char> read_buffer_{ max_read_length };
+  std::vector<std::string> out_buffer_;
 };
 
 class UartTransport : public CommandTransport
 {
   using CommandTransport::init_transport;
-  static const int default_baud = 115200;
+  static const int default_baud = 921600;
 
 public:
   bool init_transport(ros::NodeHandle& nh, std::string param_namespace, std::vector<std::string>& joint_names)
@@ -127,46 +134,86 @@ public:
     // skip if not defined
     // if it is defined it must have port and axis number, also if serial fails to open program terminates
     int baud;
-    if (!nh_ptr_->getParam(param_namepsace_ + param_prefix + "uart/baud", baud))
-    {
-      baud = default_baud;
-      ROS_DEBUG_STREAM_NAMED("UartTransport", "using default baudrate");
-    }
     std::string port;
-    if (!nh_ptr_->getParam(param_namepsace_ + param_prefix + "uart/port", port))
+    int axis_number;
+    std::string param_path = param_namepsace_ + param_prefix + "uart/joint_mapping/";
+    for (auto joint_name : joint_names_)
     {
-      ROS_FATAL_STREAM_NAMED("UartTransport", "you must specify uart port on param server!"
-                                                  << param_namepsace_ + param_prefix + "uart/port");
-      ros::shutdown();
+      ROS_DEBUG_STREAM("initializing joint:" + joint_name);
+      if (!nh_ptr_->getParam(param_path + joint_name + "/port", port))
+      {
+        continue;
+      }
+      if (!nh_ptr_->getParam(param_path + joint_name + "/axis_number", axis_number))
+      {
+        continue;
+      }
+      if (axis_number >= static_cast<int>(AxisNumber::NUM_AXES))
+      {
+        continue;
+      }
+      if (!nh_ptr_->getParam(param_path + joint_name + "/baud", baud))
+      {
+        baud = default_baud;
+      }
+      if (serial_mapping_.find(port) == serial_mapping_.end())
+      {
+        serial_mapping_[port] = std::make_shared<SerialDevice>(baud, port);
+      }
+      JointConfig config{ port, static_cast<AxisNumber>(axis_number), serial_mapping_[port] };
+      config_mapping_[joint_name] = config;
+      ROS_DEBUG_STREAM("initialized joint:" + joint_name);
     }
-    serial_device_ = std::unique_ptr<SerialDevice>(new SerialDevice(baud, port));
-    
   }
 
   bool send(std::vector<double>& position_cmd, std::vector<double>& velocity_cmd)
   {
-    // TODO map joint to serial port
-    serial_device_->write_async(boost::str(pos_cmd_fmt_ % 0 % position_cmd[0] % velocity_cmd[0]));
-
+    for (std::size_t i = 0; i < joint_names_.size(); ++i)
+    {
+      if (config_defined(joint_names_[i]))
+      {
+        config_mapping_[joint_names_[i]].serial_device->load_buffer(
+            boost::str(pos_cmd_fmt_ % static_cast<int>(config_mapping_[joint_names_[i]].axis) %
+                       truncate_decimals(position_cmd[i]) % truncate_decimals(velocity_cmd[i])));
+        config_mapping_[joint_names_[i]].serial_device->write_buffer();
+      }
+    }
   }
 
   bool receive(std::vector<double>& position)
   {
-    serial_device_->write_async(std::string("f 0\n"));
-
+    for (std::size_t i = 0; i < joint_names_.size(); ++i)
+    {
+      if (config_defined(joint_names_[i]))
+      {
+        config_mapping_[joint_names_[i]].serial_device->write_async(
+            "f" + std::to_string(static_cast<int>(config_mapping_[joint_names_[i]].axis)) + "\n");
+      }
+    }
   }
 
 private:
-  struct JointConfig{
+  struct JointConfig
+  {
     std::string port;
     AxisNumber axis;
-    
+    std::shared_ptr<SerialDevice> serial_device;
   };
   std::unordered_map<std::string, std::shared_ptr<SerialDevice>> serial_mapping_;
-  std::unordered_map<std::string, std::string> config_mapping_;
+  std::unordered_map<std::string, JointConfig> config_mapping_;
   std::unique_ptr<SerialDevice> serial_device_;
   std::shared_ptr<boost::asio::io_service> io_service_;
-  boost::basic_format<char> pos_cmd_fmt_ = boost::format("p %1% %2$.4f %3$.4f 0\n");
+  boost::basic_format<char> pos_cmd_fmt_ = boost::format("p %1% %2$.3f %3$.3f 0\n");
+
+  double truncate_decimals(double& x)
+  {
+    return std::abs(x) > 0.001 ? x : 0;
+  }
+
+  bool config_defined(std::string& joint_name)
+  {
+    return config_mapping_.find(joint_name) != config_mapping_.end();
+  }
 };
 }
 }
