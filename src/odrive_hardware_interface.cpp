@@ -40,6 +40,7 @@ ODriveHardwareInterface::~ODriveHardwareInterface()
 }
 
 bool ODriveHardwareInterface::read(const ros::Time time, const ros::Duration period){
+  command_transport_->receive(joint_position_);
 return true;
 }
 
@@ -59,6 +60,7 @@ void ODriveHardwareInterface::start(){
     (new pluginlib::ClassLoader<odrive_ros_control::transport::CommandTransport>
       ("odrive_ros_control", "odrive_ros_control::transport::CommandTransport"));
       command_transport_ = transport_loader_->createInstance("odrive_ros_control/UartTransport");
+      command_transport_->init_transport(nh_, "", joint_names_);
       ROS_DEBUG_STREAM("UartTransport loaded");
   }
   catch(pluginlib::LibraryLoadException &ex){

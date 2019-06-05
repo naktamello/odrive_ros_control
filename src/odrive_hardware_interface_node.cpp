@@ -7,7 +7,6 @@
 int main(int argc, char** argv)
 {
 ROS_INFO_STREAM_NAMED("hardware_interface", "Starting odrive_hardware_interface node");
-
 ros::init(argc, argv, "odrive_hardware_interface");
 
 ros::AsyncSpinner spinner(2);
@@ -30,7 +29,7 @@ timestamp = ros::Time::now();
 stopwatch_now = std::chrono::steady_clock::now();
 period.fromSec(std::chrono::duration_cast<std::chrono::duration<double>>(stopwatch_now-stopwatch_last).count());
 stopwatch_last = stopwatch_now;
-
+ros::Duration duration(0.002);
 while (ros::ok()){
     if (!odrive_hardware_interface.read(timestamp, period))
     {
@@ -47,6 +46,7 @@ while (ros::ok()){
 
     odrive_hardware_interface.write(timestamp, period);
 
+    duration.sleep();
 
 }
     spinner.stop();
