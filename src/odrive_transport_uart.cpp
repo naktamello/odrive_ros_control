@@ -85,6 +85,7 @@ public:
     cb_service_.state = RequestState::IDLE;
     cb_service_.wait_count = 0;
     cb_service_.cb = nullptr;
+    start_reading();
   }
 
 private:
@@ -114,12 +115,14 @@ private:
       for (auto i = 0; i < bytes_transferred; ++i)
       {
         if (io_buffer_[i] != '\n')
-          read_buffer_.push_back(io_buffer_[i]);
+        {
+          if (io_buffer_[i] != '\r')
+            read_buffer_.push_back(io_buffer_[i]);
+        }
         else
         {
           std::string payload = std::string(std::accumulate(read_buffer_.begin(), read_buffer_.end(), std::string()));
           read_buffer_.clear();
-          // ROS_DEBUG_STREAM("read complete:" << payload);
           if (cb_service_.cb)
           {
             cb_service_.cb(payload);
@@ -130,7 +133,10 @@ private:
       start_reading();
     }
     else
+    {
+      ROS_DEBUG_STREAM("read_async error");
       terminate(error);
+    }
   }
 
   void write_async_complete(const boost::system::error_code& error)
@@ -157,7 +163,7 @@ private:
   }
 
   // constants
-  static const int max_read_length = 96;
+  static const int max_read_length = 512;
   // pointers
   std::unique_ptr<boost::asio::serial_port> serial_port_;
   std::shared_ptr<boost::asio::io_service> io_service_;
@@ -181,7 +187,8 @@ public:
     CommandTransport::init_transport(nh, param_namespace, joint_names);
     // check each joint's config on param server
     // skip if not defined
-    // if it is defined it must have port and axis number, also if serial fails to open program terminates
+    // if it is defined it must have port and axis number
+    // if serial fails to open program terminates
     int baud;
     std::string port;
     int axis_number;
@@ -208,13 +215,19 @@ public:
       }
       if (serial_mapping_.find(port) == serial_mapping_.end())
       {
-        serial_mapping_[port] = { std::make_shared<SerialDevice>(baud, port), AxisNumber::AXIS0 };
+        serial_mapping_[port] = { std::make_shared<SerialDevice>(baud, port), std::vector<AxisNumber>(),
+                                  AxisNumber::NONE };
       }
+      serial_mapping_[port].active_axes.push_back(static_cast<AxisNumber>(axis_number));
       JointConfig config{
         static_cast<int>(i), port, static_cast<AxisNumber>(axis_number), &serial_mapping_[port], { 0, 0 }
       };
       config_mapping_[joint_name] = config;
       ROS_DEBUG_STREAM("initialized joint:" + joint_name);
+    }
+    for (auto& kv : serial_mapping_)
+    {
+      kv.second.current_axis = kv.second.active_axes[0];
     }
   }
 
@@ -225,6 +238,9 @@ public:
       if (config_defined(joint_names_[i]))
       {
         JointConfig* config = &config_mapping_[joint_names_[i]];
+        // ROS_DEBUG_STREAM("loading:" +
+        //                  boost::str(pos_cmd_fmt_ % static_cast<int>(config_mapping_[joint_names_[i]].axis) %
+        //                             truncate_small(position_cmd[i]) % truncate_small(velocity_cmd[i])));
         config->serial_object->device->load_buffer(
             boost::str(pos_cmd_fmt_ % static_cast<int>(config_mapping_[joint_names_[i]].axis) %
                        truncate_small(position_cmd[i]) % truncate_small(velocity_cmd[i])));
@@ -260,6 +276,7 @@ private:
   struct SerialObject
   {
     std::shared_ptr<SerialDevice> device;
+    std::vector<AxisNumber> active_axes;
     AxisNumber current_axis;
   };
   struct JointConfig
@@ -272,13 +289,12 @@ private:
   };
   using PosVel = std::array<double*, 2>;
 
-
   std::unordered_map<std::string, SerialObject> serial_mapping_;
   std::unordered_map<std::string, JointConfig> config_mapping_;
   std::shared_ptr<boost::asio::io_service> io_service_;
   boost::basic_format<char> pos_cmd_fmt_ = boost::format("p %1% %2$.3f %3$.3f 0\n");
 
-  static const int max_wait = 3;
+  static const int max_wait = 10;
 
   double truncate_small(double& x)
   {
@@ -289,19 +305,22 @@ private:
   {
     return config_mapping_.find(joint_name) != config_mapping_.end();
   }
-  AxisNumber next_axis(AxisNumber axis_number)
+  void queue_next_axis(SerialObject* serial_object)
   {
-    int next = static_cast<int>(axis_number) + 1;
-    if (static_cast<AxisNumber>(next) == AxisNumber::NUM_AXES)
-      return AxisNumber::AXIS0;
-    return static_cast<AxisNumber>(next);
+    int i = 0;
+    for (i; i < serial_object->active_axes.size(); ++i)
+    {
+      if (serial_object->current_axis == serial_object->active_axes[i])
+        break;
+    }
+    i = (i + 1) % serial_object->active_axes.size();
+    serial_object->current_axis = static_cast<AxisNumber>(i);
   }
 
   void feedback_request_callback(JointConfig* config, PosVel pos_vel, std::string payload)
   {
     std::string axis = std::to_string(static_cast<int>(config->axis));
-    AxisNumber next = next_axis(config->serial_object->current_axis);
-    config->serial_object->current_axis = next;
+    queue_next_axis(config->serial_object);
     parse_joint_feedback(pos_vel, payload);
   }
 
@@ -316,7 +335,7 @@ private:
       {
         if (i == pos_vel.size())
         {
-          ROS_DEBUG_STREAM("out of bounds");
+          ROS_DEBUG_STREAM("parse_joint_feedback:out of bounds");
           return false;
         }
         *pos_vel[i++] = boost::lexical_cast<double>(item);
@@ -325,7 +344,7 @@ private:
     }
     catch (boost::bad_lexical_cast)
     {
-      ROS_DEBUG_STREAM("bad cast");
+      ROS_DEBUG_STREAM("parse_joint_feedback:bad cast");
       return false;
     }
   }
