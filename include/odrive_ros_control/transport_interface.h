@@ -33,19 +33,20 @@ public:
     nh_ptr_ = std::make_shared<ros::NodeHandle>(nh);
     param_namepsace_ = param_namespace;
     joint_names_ = joint_names;
-    positions_.resize(joint_names_.size());
+    position_.resize(joint_names_.size());
   };
   virtual ~CommandTransport()
   {
   }
   virtual bool send(std::vector<double>& position_cmd, std::vector<double>& velocity_cmd) = 0;
-  virtual bool receive(std::vector<double>& position) = 0;
+  virtual bool receive(std::vector<double>& position, std::vector<double>& velocity) = 0;
 
 protected:
   std::shared_ptr<ros::NodeHandle> nh_ptr_;
   std::string param_namepsace_;
   std::vector<std::string> joint_names_;
-  std::vector<double> positions_;
+  std::vector<double> position_;
+  std::vector<double> velocity_;
 };
 }
 }

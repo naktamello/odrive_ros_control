@@ -44,9 +44,18 @@ protected:
   std::vector<double> joint_velocity_command_;
   std::vector<double> joint_effort_command_;
 
+  // outgoing command & incoming feedback
+  // separate copies needed because hardware_interface class is not aware when controller updates values (joint_trajectory_controller_impl.h)
+  std::vector<double> hardware_position_;
+  std::vector<double> hardware_velocity_;
+  std::vector<double> hardware_position_command_;
+  std::vector<double> hardware_velocity_command_;
+  std::vector<double> multiplier_;
+  bool use_multiplier_ = false;
   hardware_interface::JointStateInterface joint_state_interface_;
   hardware_interface::PosVelJointInterface posvel_joint_interface_;
 
+  void apply_multiplier(std::vector<double>& src, std::vector<double>& dst, bool divide);
   boost::shared_ptr<pluginlib::ClassLoader<odrive_ros_control::transport::CommandTransport> > transport_loader_;
   boost::shared_ptr<odrive_ros_control::transport::CommandTransport> command_transport_;
 };

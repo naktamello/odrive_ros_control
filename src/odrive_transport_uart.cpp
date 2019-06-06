@@ -11,6 +11,7 @@
 #include <boost/format.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/thread.hpp>
+#include <functional>
 #include <iostream>
 #include <unordered_map>
 
@@ -118,7 +119,8 @@ private:
           std::string payload = std::string(std::accumulate(read_buffer_.begin(), read_buffer_.end(), std::string()));
           read_buffer_.clear();
           // ROS_DEBUG_STREAM("read complete:" << payload);
-          if (cb_service_.cb){
+          if (cb_service_.cb)
+          {
             cb_service_.cb(payload);
             reset_request_state();
           }
@@ -204,9 +206,9 @@ public:
       }
       if (serial_mapping_.find(port) == serial_mapping_.end())
       {
-        serial_mapping_[port] = {std::make_shared<SerialDevice>(baud, port), AxisNumber::AXIS0};
+        serial_mapping_[port] = { std::make_shared<SerialDevice>(baud, port), AxisNumber::AXIS0 };
       }
-      JointConfig config{ port, static_cast<AxisNumber>(axis_number), &serial_mapping_[port] };
+      JointConfig config{ port, static_cast<AxisNumber>(axis_number), &serial_mapping_[port], { 0, 0 } };
       config_mapping_[joint_name] = config;
       ROS_DEBUG_STREAM("initialized joint:" + joint_name);
     }
@@ -227,24 +229,27 @@ public:
     }
   }
 
-  bool receive(std::vector<double>& position)
+  bool receive(std::vector<double>& position, std::vector<double>& velocity)
   {
     for (std::size_t i = 0; i < joint_names_.size(); ++i)
     {
       if (config_defined(joint_names_[i]))
       {
         JointConfig* config = &config_mapping_[joint_names_[i]];
-        if ((config->serial_object->current_axis == config->axis) && config->serial_object->device->can_take_request()){
+        if ((config->serial_object->current_axis == config->axis) && config->serial_object->device->can_take_request())
+        {
           std::string axis = std::to_string(static_cast<int>(config->axis));
           AxisNumber next = next_axis(config->serial_object->current_axis);
-        config->serial_object->device->request_async(
-            "f " + axis + "\n",
-            [axis, next, config](std::string payload){
-                ROS_DEBUG_STREAM("callback(" + axis + ")next=" + std::to_string(static_cast<int>(next)) + ":" + payload);
-                config->serial_object->current_axis = next;
-            });
+          config->serial_object->device->request_async("f " + axis + "\n",
+          //  [axis, next, config](std::string payload) {
+          //   ROS_DEBUG_STREAM("callback(" + axis + ")next=" + std::to_string(static_cast<int>(next)) + ":" + payload);
+          //   config->serial_object->current_axis = next;
+          // }
+          std::bind(&UartTransport::feedback_request_callback, this, config, std::placeholders::_1)
+          );
         }
-        if (config->serial_object->device->loop_count() > 3){
+        if (config->serial_object->device->loop_count() > max_wait)
+        {
           config->serial_object->device->reset_request_state();
         }
       }
@@ -262,12 +267,15 @@ private:
     std::string port;
     AxisNumber axis;
     SerialObject* serial_object;
+    std::array<double, 2> pos_vel;
   };
 
   std::unordered_map<std::string, SerialObject> serial_mapping_;
   std::unordered_map<std::string, JointConfig> config_mapping_;
   std::shared_ptr<boost::asio::io_service> io_service_;
   boost::basic_format<char> pos_cmd_fmt_ = boost::format("p %1% %2$.3f %3$.3f 0\n");
+
+  static const int max_wait = 3;
 
   double truncate_small(double& x)
   {
@@ -278,11 +286,20 @@ private:
   {
     return config_mapping_.find(joint_name) != config_mapping_.end();
   }
-  AxisNumber next_axis(AxisNumber axis_number){
+  AxisNumber next_axis(AxisNumber axis_number)
+  {
     int next = static_cast<int>(axis_number) + 1;
     if (static_cast<AxisNumber>(next) == AxisNumber::NUM_AXES)
       return AxisNumber::AXIS0;
     return static_cast<AxisNumber>(next);
+  }
+
+  void feedback_request_callback(JointConfig* config, std::string payload)
+  {
+    std::string axis = std::to_string(static_cast<int>(config->axis));
+    AxisNumber next = next_axis(config->serial_object->current_axis);
+    ROS_DEBUG_STREAM("callback(" + axis + ")next=" + std::to_string(static_cast<int>(next)) + ":" + payload);
+    config->serial_object->current_axis = next;
   }
 };
 }
