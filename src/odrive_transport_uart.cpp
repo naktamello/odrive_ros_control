@@ -1,8 +1,11 @@
 /*
  * Author: naktamello
  */
-#include <odrive_ros_control/transport_interface.h>
-
+// stl
+#include <iostream>
+#include <sstream>
+#include <unordered_map>
+// boost
 #include <boost/asio.hpp>
 #include <boost/asio/serial_port.hpp>
 #include <boost/bind.hpp>
@@ -11,9 +14,8 @@
 #include <boost/format.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/thread.hpp>
-#include <functional>
-#include <iostream>
-#include <unordered_map>
+// odrive_ros_control
+#include <odrive_ros_control/transport_interface.h>
 
 namespace odrive_ros_control
 {
@@ -80,7 +82,6 @@ public:
 
   void reset_request_state()
   {
-    ROS_DEBUG_STREAM("reset_request_state:" + std::to_string(cb_service_.wait_count));
     cb_service_.state = RequestState::IDLE;
     cb_service_.wait_count = 0;
     cb_service_.cb = nullptr;
@@ -185,8 +186,9 @@ public:
     std::string port;
     int axis_number;
     std::string param_path = param_namepsace_ + param_prefix + "uart/joint_mapping/";
-    for (auto joint_name : joint_names_)
+    for (std::size_t i = 0; i < joint_names_.size(); ++i)
     {
+      auto joint_name = joint_names_[i];
       ROS_DEBUG_STREAM("initializing joint:" + joint_name);
       if (!nh_ptr_->getParam(param_path + joint_name + "/port", port))
       {
@@ -208,7 +210,9 @@ public:
       {
         serial_mapping_[port] = { std::make_shared<SerialDevice>(baud, port), AxisNumber::AXIS0 };
       }
-      JointConfig config{ port, static_cast<AxisNumber>(axis_number), &serial_mapping_[port], { 0, 0 } };
+      JointConfig config{
+        static_cast<int>(i), port, static_cast<AxisNumber>(axis_number), &serial_mapping_[port], { 0, 0 }
+      };
       config_mapping_[joint_name] = config;
       ROS_DEBUG_STREAM("initialized joint:" + joint_name);
     }
@@ -238,19 +242,15 @@ public:
         JointConfig* config = &config_mapping_[joint_names_[i]];
         if ((config->serial_object->current_axis == config->axis) && config->serial_object->device->can_take_request())
         {
-          std::string axis = std::to_string(static_cast<int>(config->axis));
-          AxisNumber next = next_axis(config->serial_object->current_axis);
-          config->serial_object->device->request_async("f " + axis + "\n",
-          //  [axis, next, config](std::string payload) {
-          //   ROS_DEBUG_STREAM("callback(" + axis + ")next=" + std::to_string(static_cast<int>(next)) + ":" + payload);
-          //   config->serial_object->current_axis = next;
-          // }
-          std::bind(&UartTransport::feedback_request_callback, this, config, std::placeholders::_1)
-          );
+          PosVel pos_vel = { &position[i], &velocity[i] };
+          config->serial_object->device->request_async(
+              "f " + std::to_string(static_cast<int>(config->axis)) + "\n",
+              std::bind(&UartTransport::feedback_request_callback, this, config, pos_vel, std::placeholders::_1));
         }
         if (config->serial_object->device->loop_count() > max_wait)
         {
           config->serial_object->device->reset_request_state();
+          ROS_DEBUG_STREAM("no response, resetting request");
         }
       }
     }
@@ -264,11 +264,14 @@ private:
   };
   struct JointConfig
   {
+    int joint_idx;
     std::string port;
     AxisNumber axis;
     SerialObject* serial_object;
     std::array<double, 2> pos_vel;
   };
+  using PosVel = std::array<double*, 2>;
+
 
   std::unordered_map<std::string, SerialObject> serial_mapping_;
   std::unordered_map<std::string, JointConfig> config_mapping_;
@@ -294,12 +297,37 @@ private:
     return static_cast<AxisNumber>(next);
   }
 
-  void feedback_request_callback(JointConfig* config, std::string payload)
+  void feedback_request_callback(JointConfig* config, PosVel pos_vel, std::string payload)
   {
     std::string axis = std::to_string(static_cast<int>(config->axis));
     AxisNumber next = next_axis(config->serial_object->current_axis);
-    ROS_DEBUG_STREAM("callback(" + axis + ")next=" + std::to_string(static_cast<int>(next)) + ":" + payload);
     config->serial_object->current_axis = next;
+    parse_joint_feedback(pos_vel, payload);
+  }
+
+  bool parse_joint_feedback(PosVel& pos_vel, std::string& payload)
+  {
+    try
+    {
+      std::string item;
+      std::stringstream ss(payload);
+      int i = 0;
+      while (std::getline(ss, item, ' '))
+      {
+        if (i == pos_vel.size())
+        {
+          ROS_DEBUG_STREAM("out of bounds");
+          return false;
+        }
+        *pos_vel[i++] = boost::lexical_cast<double>(item);
+      }
+      return true;
+    }
+    catch (boost::bad_lexical_cast)
+    {
+      ROS_DEBUG_STREAM("bad cast");
+      return false;
+    }
   }
 };
 }

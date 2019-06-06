@@ -16,17 +16,17 @@ ODriveHardwareInterface::ODriveHardwareInterface()
     ros::shutdown();
   }
   n_dof_ = joint_names_.size();
-  joint_position_.resize(n_dof_);
-  joint_velocity_.resize(n_dof_);
-  joint_effort_.resize(n_dof_);
-  joint_position_command_.resize(n_dof_);
-  joint_velocity_command_.resize(n_dof_);
-  joint_effort_command_.resize(n_dof_);
+  joint_position_.assign(n_dof_, 0.0);
+  joint_velocity_.assign(n_dof_, 0.0);
+  joint_effort_.assign(n_dof_, 0.0);
+  joint_position_command_.assign(n_dof_, 0.0);
+  joint_velocity_command_.assign(n_dof_, 0.0);
+  joint_effort_command_.assign(n_dof_, 0.0);
   // scaled values
-  hardware_position_.resize(n_dof_);
-  hardware_velocity_.resize(n_dof_);
-  hardware_position_command_.resize(n_dof_);
-  hardware_velocity_command_.resize(n_dof_);
+  hardware_position_.assign(n_dof_, 0.0);
+  hardware_velocity_.assign(n_dof_, 0.0);
+  hardware_position_command_.assign(n_dof_, 0.0);
+  hardware_velocity_command_.assign(n_dof_, 0.0);
   if (nh_.getParam("/odrive/hardware_interface/multiplier", multiplier_))
   {
     if (multiplier_.size() != joint_names_.size())
@@ -82,8 +82,6 @@ bool ODriveHardwareInterface::write(const ros::Time time, const ros::Duration pe
   {
     command_transport_->send(joint_position_command_, joint_velocity_command_);
   }
-  // ROS_DEBUG_STREAM(boost::format("ODriveHardwareInterface::write=%1% /
-  // %2%")%joint_position_command_[0]%joint_velocity_command_[0]);
   return true;
 }
 
