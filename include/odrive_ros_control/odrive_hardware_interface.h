@@ -58,6 +58,7 @@ protected:
   void apply_multiplier(std::vector<double>& src, std::vector<double>& dst, bool divide);
   boost::shared_ptr<pluginlib::ClassLoader<odrive_ros_control::transport::CommandTransport> > transport_loader_;
   boost::shared_ptr<odrive_ros_control::transport::CommandTransport> command_transport_;
+  std::string get_transport_plugin();
 };
 
 }

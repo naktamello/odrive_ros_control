@@ -4,6 +4,7 @@
 #include <odrive_ros_control/odrive_hardware_interface.h>
 #include <boost/format.hpp>
 #include <boost/shared_ptr.hpp>
+#include <string>
 
 namespace odrive_hardware_interface
 {
@@ -101,15 +102,37 @@ void ODriveHardwareInterface::configure()
 {
 }
 
+std::string ODriveHardwareInterface::get_transport_plugin()
+{
+  std::string interface;
+  if (!nh_.getParam(odrive_ros_control::transport::param_prefix + "/interface", interface))
+  {
+    ROS_FATAL_STREAM_NAMED("odrive_ros_control", "you must define the interface type on the param server");
+    ros::shutdown();
+  };
+  std::transform(interface.begin(), interface.end(), interface.begin(), ::tolower);
+  if (interface == "uart")
+    return "odrive_ros_control/UartTransport";
+  else if (interface == "can")
+    return "odrive_ros_control/CanTransport";
+  else
+  {
+    ROS_FATAL_STREAM_NAMED("odrive_ros_control", "unknown transport interface: " << interface);
+    ros::shutdown();
+  }
+}
+
 void ODriveHardwareInterface::start()
 {
   try
   {
+    // TODO robot namespace
+
     transport_loader_.reset(new pluginlib::ClassLoader<odrive_ros_control::transport::CommandTransport>(
         "odrive_ros_control", "odrive_ros_control::transport::CommandTransport"));
-    command_transport_ = transport_loader_->createInstance("odrive_ros_control/UartTransport");
+    command_transport_ = transport_loader_->createInstance(std::forward<std::string>(ODriveHardwareInterface::get_transport_plugin()));
     command_transport_->init_transport(nh_, "", joint_names_);
-    ROS_DEBUG_STREAM("UartTransport loaded");
+    ROS_DEBUG_STREAM("CommandTransport loaded");
   }
   catch (pluginlib::LibraryLoadException& ex)
   {
