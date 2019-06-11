@@ -29,7 +29,7 @@ public:
   {
     out_buffer_.reserve(static_cast<int>(AxisNumber::NUM_AXES));
     io_service_ = std::make_shared<boost::asio::io_service>();
-    serial_port_ = std::unique_ptr<boost::asio::serial_port>(new boost::asio::serial_port(*io_service_, device));
+    serial_port_ = std::make_unique<boost::asio::serial_port>(*io_service_, device);
     if (!serial_port_->is_open())
     {
       ROS_FATAL_NAMED("odrive_ros_control", "Cannot open serial port!");
