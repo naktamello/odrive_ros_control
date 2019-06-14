@@ -246,6 +246,99 @@ public:
       }
     }
       }
+  bool receive(std::vector<double>& position, std::vector<double>& velocity)
+  {
+    for (std::size_t i = 0; i < joint_names_.size(); ++i)
+    {
+      if (config_defined(config_mapping_, joint_names_[i]))
+      {
+        UartJointConfig* config = boost::any_cast<UartJointConfig>(&config_mapping_[joint_names_[i]]);
+        if ((config->serial_object->current_axis == config->axis) && config->serial_object->device->can_take_request())
+        {
+          PosVel pos_vel = { &position[i], &velocity[i] };
+          config->serial_object->device->request_async(
+              "f " + std::to_string(static_cast<int>(config->axis)) + "\n",
+              std::bind(&UartTransport::feedback_request_callback, this, config, pos_vel, std::placeholders::_1));
+        }
+        if (config->serial_object->device->loop_count() > max_wait)
+        {
+          config->serial_object->device->reset_request_state();
+          ROS_DEBUG_STREAM("no response, resetting request");
+        }
+      }
+    }
+  }
+
+private:
+  struct SerialObject
+  {
+    std::shared_ptr<SerialDevice> device;
+    std::vector<AxisNumber> active_axes;
+    AxisNumber current_axis;
+  };
+  struct UartJointConfig: JointConfig
+  {
+    UartJointConfig(){};
+    UartJointConfig(int joint_idx_, std::array<double, 2> pos_vel_, std::string port_, AxisNumber axis_, SerialObject* serial_object_):
+    JointConfig(joint_idx_,pos_vel_), port(port_), axis(axis_), serial_object(serial_object_){}
+    std::string port;
+    AxisNumber axis;
+    SerialObject* serial_object;
+  };
+  using PosVel = std::array<double*, 2>;
+
+  boost::unordered_map<std::string, SerialObject> serial_mapping_;
+  ConfigMapping config_mapping_;
+  std::shared_ptr<boost::asio::io_service> io_service_;
+  boost::basic_format<char> pos_cmd_fmt_ = boost::format("p %1% %2$.3f %3$.3f 0\n");
+
+  static const int max_wait = 10;
+
+  double truncate_small(double& x)
+  {
+    return std::abs(x) > 0.001 ? x : 0;
+  }
+
+  // bool config_defined(std::string& joint_name)
+  // {
+  //   return config_mapping_.find(joint_name) != config_mapping_.end();
+  // }
+  void queue_next_axis(SerialObject* serial_object)
+  {
+    int i = 0;
+    for (i; i < serial_object->active_axes.size(); ++i)
+    {
+      if (serial_object->current_axis == serial_object->active_axes[i])
+        break;
+    }
+    i = (i + 1) % serial_object->active_axes.size();
+    serial_object->current_axis = static_cast<AxisNumber>(i);
+  }
+
+  void feedback_request_callback(UartJointConfig* config, PosVel pos_vel, std::string payload)
+  {
+    std::string axis = std::to_string(static_cast<int>(config->axis));
+    queue_next_axis(config->serial_object);
+    parse_joint_feedback(pos_vel, payload);
+  }
+
+  bool parse_joint_feedback(PosVel& pos_vel, std::string& payload)
+  {
+    try
+    {
+      std::string item;
+      std::stringstream ss(payload);
+      int i = 0;
+      while (std::getline(ss, item, ' '))
+      {
+        if (i == pos_vel.size())
+        {
+          ROS_DEBUG_STREAM("parse_joint_feedback:out of bounds");
+          return false;
+        }
+        *pos_vel[i++] = boost::lexical_cast<double>(item);
+      }
+
       return true;
     }
     catch (boost::bad_lexical_cast)
