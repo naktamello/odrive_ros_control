@@ -8,12 +8,12 @@
 #include <boost/asio.hpp>
 #include <boost/asio/serial_port.hpp>
 #include <boost/bind.hpp>
-#include <boost/unordered_map.hpp>
 #include <boost/circular_buffer.hpp>
 #include <boost/date_time/posix_time/posix_time_types.hpp>
 #include <boost/format.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/thread.hpp>
+#include <boost/unordered_map.hpp>
 // odrive_ros_control
 #include <odrive_ros_control/transport_interface.h>
 
@@ -239,13 +239,13 @@ public:
         // ROS_DEBUG_STREAM("loading:" +
         //                  boost::str(pos_cmd_fmt_ % static_cast<int>(config_mapping_[joint_names_[i]].axis) %
         //                             truncate_small(position_cmd[i]) % truncate_small(velocity_cmd[i])));
-        config->serial_object->device->load_buffer(
-            boost::str(pos_cmd_fmt_ % static_cast<int>(config->axis) %
-                       truncate_small(position_cmd[i]) % truncate_small(velocity_cmd[i])));
+        config->serial_object->device->load_buffer(boost::str(pos_cmd_fmt_ % static_cast<int>(config->axis) %
+                                                              truncate_small(position_cmd[i]) %
+                                                              truncate_small(velocity_cmd[i])));
         config->serial_object->device->write_buffer();
       }
     }
-      }
+  }
   bool receive(std::vector<double>& position, std::vector<double>& velocity)
   {
     for (std::size_t i = 0; i < joint_names_.size(); ++i)
@@ -276,17 +276,20 @@ private:
     std::vector<AxisNumber> active_axes;
     AxisNumber current_axis;
   };
-  struct UartJointConfig: JointConfig
+  struct UartJointConfig : JointConfig
   {
     UartJointConfig(){};
-    UartJointConfig(int joint_idx_, std::array<double, 2> pos_vel_, std::string port_, AxisNumber axis_, SerialObject* serial_object_):
-    JointConfig(joint_idx_,pos_vel_), port(port_), axis(axis_), serial_object(serial_object_){}
+    UartJointConfig(int joint_idx_, std::array<double, 2> pos_vel_, std::string port_, AxisNumber axis_,
+                    SerialObject* serial_object_)
+      : JointConfig(joint_idx_, pos_vel_), port(port_), axis(axis_), serial_object(serial_object_)
+    {
+    }
     std::string port;
     AxisNumber axis;
     SerialObject* serial_object;
   };
   using PosVel = std::array<double*, 2>;
-
+  
   boost::unordered_map<std::string, SerialObject> serial_mapping_;
   ConfigMapping config_mapping_;
   std::shared_ptr<boost::asio::io_service> io_service_;
@@ -299,10 +302,6 @@ private:
     return std::abs(x) > 0.001 ? x : 0;
   }
 
-  // bool config_defined(std::string& joint_name)
-  // {
-  //   return config_mapping_.find(joint_name) != config_mapping_.end();
-  // }
   void queue_next_axis(SerialObject* serial_object)
   {
     int i = 0;

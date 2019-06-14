@@ -13,18 +13,23 @@
 #include <sys/types.h>
 #include <unistd.h>
 // boost
+#include <boost/any.hpp>
 #include <boost/asio.hpp>
 #include <boost/bind.hpp>
 #include <boost/date_time/posix_time/posix_time_types.hpp>
 #include <boost/format.hpp>
 #include <boost/thread.hpp>
-#include <boost/any.hpp>
 // odrive_ros_control
 #include <odrive_ros_control/transport_interface.h>
 namespace odrive_ros_control
 {
 namespace transport
 {
+namespace CanSimpleCommands
+{
+const int ODriveHeartbeatMessage = 0x001;
+const int GetEncoderEstimates = 0x009;
+}
 enum class Endianness
 {
   LITTLE = 0,
@@ -132,7 +137,8 @@ using CanFrame = struct can_frame;
 class CanDevice
 {
 public:
-  CanDevice(std::string device_name) : device_name_(device_name)
+  using CanRxCallback = std::function<void(CanFrame)>;
+  CanDevice(std::string device_name, CanRxCallback cb) : device_name_(device_name), callback_(cb)
   {
     io_service_ = std::make_shared<boost::asio::io_service>();
     struct sockaddr_can addr
@@ -183,9 +189,10 @@ private:
   {
     if (!error)
     {
-      std::cout << "received:" + std::to_string(bytes_transferred) << std::endl;
+      // std::cout << "received:" + std::to_string(bytes_transferred) << std::endl;
       std::memcpy(&frame_, read_buffer_, bytes_transferred);
-      write_async(frame_);
+      // write_async(frame_);
+      callback_(frame_);
       print_can_msg(frame_);
       start_reading();
     }
@@ -199,7 +206,7 @@ private:
   {
     if (!error)
     {
-      std::cout << "write async complete" << std::endl;
+      // std::cout << "write async complete" << std::endl;
     }
     else
     {
@@ -235,6 +242,7 @@ private:
   CanFrame frame_{};
   std::unique_ptr<boost::asio::posix::stream_descriptor> socket_;
   std::shared_ptr<boost::asio::io_service> io_service_;
+  CanRxCallback callback_;
 };
 
 class CanTransport : public CommandTransport
@@ -250,6 +258,11 @@ public:
   {
     CommandTransport::init_transport(nh, param_namespace, joint_names);
     ROS_DEBUG_STREAM("CanTransport::init_transport()");
+    joint_states_.resize(joint_names.size());
+    for (auto state : joint_states_)
+    {
+      state.initialized = false;
+    }
     auto joint_param_path = param_path_ + "joint_mapping/";
     std::string device_name;
     if (!nh_ptr_->getParam(param_path_ + "device_name", device_name))
@@ -257,7 +270,8 @@ public:
       ROS_FATAL_STREAM("you must provide can device name--i.e. 'slcan0'--in the param server!");
       ros::shutdown();
     }
-    can_device_ = std::make_unique<CanDevice>(device_name);
+    can_device_ = std::make_unique<CanDevice>(device_name,
+                                              std::bind(&CanTransport::can_rx_callback, this, std::placeholders::_1));
 
     int node_id;
     for (std::size_t i = 0; i < joint_names_.size(); ++i)
@@ -287,11 +301,25 @@ public:
   }
   bool receive(std::vector<double> &position, std::vector<double> &velocity)
   {
+    for (std::size_t i = 0; i < joint_names_.size(); ++i)
+    {
+      if (config_defined(config_mapping_, joint_names_[i]))
+      {
+        CanJointConfig *config = boost::any_cast<CanJointConfig>(&config_mapping_[joint_names_[i]]);
+        if (joint_states_[i].initialized){
+          position[i] = joint_states_[i].position;
+          velocity[i] = joint_states_[i].velocity;
+        }
+        CanFrame can_frame = make_feedback_command(config->node_id);
+        can_device_->write_async(can_frame);
+      }
+    }
   }
 
 private:
   std::unique_ptr<CanDevice> can_device_;
   CanSimpleSerializer serializer_;
+  std::vector<JointState> joint_states_;
   struct CanJointConfig : JointConfig
   {
     CanJointConfig(){};
@@ -306,10 +334,50 @@ private:
   {
     CanFrame can_frame{};
     can_frame.can_dlc = 8;
-    can_frame.can_id = node_id;
+    can_frame.can_id = (node_id << 5) | 0x00C;
     serializer_.serialize_int32(static_cast<int32_t>(position), static_cast<uint8_t *>(can_frame.data));
     serializer_.serialize_int32(static_cast<int16_t>(velocity), static_cast<uint8_t *>(&can_frame.data[4]));
     return can_frame;
+  }
+  CanFrame make_feedback_command(int node_id)
+  {
+    CanFrame can_frame{};
+    can_frame.can_dlc = 8;
+    can_frame.can_id = (node_id << 5) | 0x009;
+    return can_frame;
+  }
+
+  int joint_idx_from_node_id(int node_id)
+  {
+    for (auto& kv : config_mapping_)
+    {
+      if (node_id == boost::any_cast<CanJointConfig>(kv.second).node_id)
+        return boost::any_cast<CanJointConfig>(kv.second).joint_idx;
+    }
+    return -1;
+  }
+
+  void can_rx_callback(CanFrame frame)
+  {
+    int joint_idx = -1;
+    int node_id = (frame.can_id >> 5) & 0x03F;
+    int cmd_id = frame.can_id & 0x01F;
+    switch (cmd_id)
+    {
+      case CanSimpleCommands::ODriveHeartbeatMessage:
+        break;
+      case CanSimpleCommands::GetEncoderEstimates:
+        joint_idx = joint_idx_from_node_id(node_id);
+        if (joint_idx == -1)
+          break;
+        joint_states_[joint_idx].position = static_cast<double>(serializer_.deserialize_float(frame.data));
+        joint_states_[joint_idx].velocity = static_cast<double>(serializer_.deserialize_float(&frame.data[4]));
+        if (!joint_states_[joint_idx].initialized)
+          joint_states_[joint_idx].initialized = true;
+        break;
+      default:
+        break;
+    }
   }
 };
 }

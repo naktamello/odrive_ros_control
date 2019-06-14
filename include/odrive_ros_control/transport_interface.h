@@ -43,6 +43,14 @@ struct JointConfig
   std::array<double, 2> pos_vel;
 };
 
+struct JointState{
+  bool initialized;
+  double position;
+  double velocity;
+  uint32_t error;
+  uint32_t current_state;
+};
+
 const std::string param_prefix = "/odrive/transport/";
 class CommandTransport
 {
