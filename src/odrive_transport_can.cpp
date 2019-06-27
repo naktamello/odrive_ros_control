@@ -171,6 +171,7 @@ public:
   {
     if (can_socket_ != -1)
       ::close(can_socket_);
+    io_service_->stop();
   }
   void write_async(CanFrame &frame)
   {

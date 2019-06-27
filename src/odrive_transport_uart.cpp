@@ -41,6 +41,11 @@ public:
     start_reading();
   }
 
+  ~SerialDevice(){
+    io_service_->stop();
+    serial_port_->close();
+  }
+
   void load_buffer(std::string&& msg)
   {
     out_buffer_.emplace_back(msg);
