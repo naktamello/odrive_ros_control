@@ -7,6 +7,8 @@
 // std lib
 #include <vector>
 #include <string>
+// boost
+#include <boost/lexical_cast.hpp>
 // ROS
 #include <ros/ros.h>
 #include <pluginlib/class_loader.h>

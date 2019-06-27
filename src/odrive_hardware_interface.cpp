@@ -105,7 +105,7 @@ void ODriveHardwareInterface::configure()
 std::string ODriveHardwareInterface::get_transport_plugin()
 {
   std::string interface;
-  if (!nh_.getParam(odrive_ros_control::transport::param_prefix + "/interface", interface))
+  if (!nh_.getParam(odrive_ros_control::transport::param_prefix + "interface", interface))
   {
     ROS_FATAL_STREAM_NAMED("odrive_ros_control", "you must define the interface type on the param server");
     ros::shutdown();

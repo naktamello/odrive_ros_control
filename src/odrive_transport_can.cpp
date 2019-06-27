@@ -210,7 +210,7 @@ private:
     }
     else
     {
-      std::cout << "write error!" << std::endl;
+      std::cout << "write error!" + error.message() << std::endl;
     }
   }
 
@@ -250,7 +250,7 @@ class CanTransport : public CommandTransport
   using CommandTransport::init_transport;
 
 public:
-  CanTransport() : serializer_()
+  CanTransport() : serializer_(), loop_cnt_(0)
   {
   }
 
@@ -306,7 +306,8 @@ public:
       if (config_defined(config_mapping_, joint_names_[i]))
       {
         CanJointConfig *config = boost::any_cast<CanJointConfig>(&config_mapping_[joint_names_[i]]);
-        if (joint_states_[i].initialized){
+        if (joint_states_[i].initialized)
+        {
           position[i] = joint_states_[i].position;
           velocity[i] = joint_states_[i].velocity;
         }
@@ -317,6 +318,7 @@ public:
   }
 
 private:
+  uint32_t loop_cnt_;
   std::unique_ptr<CanDevice> can_device_;
   CanSimpleSerializer serializer_;
   std::vector<JointState> joint_states_;
@@ -343,13 +345,13 @@ private:
   {
     CanFrame can_frame{};
     can_frame.can_dlc = 8;
-    can_frame.can_id = (node_id << 5) | 0x009;
+    can_frame.can_id = (node_id << 5) | 0x009 | (1 << 30);
     return can_frame;
   }
 
   int joint_idx_from_node_id(int node_id)
   {
-    for (auto& kv : config_mapping_)
+    for (auto &kv : config_mapping_)
     {
       if (node_id == boost::any_cast<CanJointConfig>(kv.second).node_id)
         return boost::any_cast<CanJointConfig>(kv.second).joint_idx;
