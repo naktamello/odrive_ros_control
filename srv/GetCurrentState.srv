@@ -1,0 +1,4 @@
+string joint_name
+---
+string result
+uint8 axis_state

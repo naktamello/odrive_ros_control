@@ -18,6 +18,20 @@ find_package(catkin REQUIRED COMPONENTS
   angles
   gazebo_dev
   simple_message
+  message_generation
+)
+
+add_service_files(
+   FILES
+   SetRequestedState.srv
+   GetAxisError.srv
+   GetCurrentState.srv
+   GetVbusVoltage.srv
+)
+
+generate_messages(
+   DEPENDENCIES
+   std_msgs
 )
 
 catkin_package(
@@ -42,6 +56,9 @@ catkin_package(
     odrive_hardware_interface
     odrive_hardware_sim
 )
+
+
+
 
 add_definitions(-DLINUXSOCKETS=1)
 

@@ -6,6 +6,10 @@
 #include <boost/shared_ptr.hpp>
 #include <string>
 
+#include <odrive_ros_control/GetAxisError.h>
+#include <odrive_ros_control/GetCurrentState.h>
+#include <odrive_ros_control/SetRequestedState.h>
+
 namespace odrive_hardware_interface
 {
 ODriveHardwareInterface::ODriveHardwareInterface()
@@ -130,7 +134,8 @@ void ODriveHardwareInterface::start()
 
     transport_loader_.reset(new pluginlib::ClassLoader<odrive_ros_control::transport::CommandTransport>(
         "odrive_ros_control", "odrive_ros_control::transport::CommandTransport"));
-    command_transport_ = transport_loader_->createInstance(std::forward<std::string>(ODriveHardwareInterface::get_transport_plugin()));
+    command_transport_ =
+        transport_loader_->createInstance(std::forward<std::string>(ODriveHardwareInterface::get_transport_plugin()));
     command_transport_->init_transport(nh_, "", joint_names_);
     ROS_DEBUG_STREAM("CommandTransport loaded");
   }
@@ -140,4 +145,5 @@ void ODriveHardwareInterface::start()
     ros::shutdown();
   }
 }
+
 }
