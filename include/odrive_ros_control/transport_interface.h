@@ -10,8 +10,11 @@
 // boost
 #include <boost/algorithm/string.hpp>
 #include <boost/any.hpp>
-#include <boost/unordered_map.hpp>
 #include <boost/type_index.hpp>
+#include <boost/unordered_map.hpp>
+// odrive_ros_conrol
+#include <odrive_ros_control/SetReadMode.h>
+#include <odrive_ros_control/SetWriteMode.h>
 
 namespace odrive_ros_control
 {
@@ -43,11 +46,12 @@ struct JointConfig
   std::array<double, 2> pos_vel;
 };
 
-struct JointState{
+struct JointState
+{
   bool initialized;
   double position;
   double velocity;
-  uint32_t error;
+  uint32_t axis_error;
   uint32_t current_state;
 };
 
@@ -57,6 +61,8 @@ class CommandTransport
 public:
   virtual bool init_transport(ros::NodeHandle& nh, std::string param_namespace, std::vector<std::string>& joint_names)
   {
+    read_on_ = false;
+    write_on_ = false;
     nh_ptr_ = std::make_shared<ros::NodeHandle>(nh);
     nh_ptr_->getParam(param_prefix + "interface", transport_type_);
     std::transform(transport_type_.begin(), transport_type_.end(), transport_type_.begin(), ::tolower);
@@ -64,6 +70,11 @@ public:
     param_path_ = param_namespace_ + param_prefix + transport_type_ + "/";
     joint_names_ = joint_names;
     position_.resize(joint_names_.size());
+
+    services_.push_back(
+        nh_ptr_->advertiseService("/odrive_ros_control/set_read_mode", &CommandTransport::handle_set_read_mode, this));
+    services_.push_back(
+        nh_ptr_->advertiseService("/odrive_ros_control/set_write_mode", &CommandTransport::handle_set_write_mode, this));
   };
   virtual ~CommandTransport()
   {
@@ -73,15 +84,30 @@ public:
 
 protected:
   std::shared_ptr<ros::NodeHandle> nh_ptr_;
+  std::vector<ros::ServiceServer> services_;
   std::string param_namespace_;
   std::string param_path_;
   std::string transport_type_;
   std::vector<std::string> joint_names_;
   std::vector<double> position_;
   std::vector<double> velocity_;
+  bool read_on_;
+  bool write_on_;
   virtual bool config_defined(const ConfigMapping& config_mapping, std::string& joint_name)
   {
     return config_mapping.find(joint_name) != config_mapping.end();
+  }
+  virtual bool handle_set_read_mode(odrive_ros_control::SetReadMode::Request& req,
+                                    odrive_ros_control::SetReadMode::Response& res)
+  {
+    read_on_ = req.read_on;
+    ROS_DEBUG_STREAM("handle_set_read_mode:" + (req.read_on == true) ? "ON" : "OFF");
+  }
+  virtual bool handle_set_write_mode(odrive_ros_control::SetWriteMode::Request& req,
+                                     odrive_ros_control::SetWriteMode::Response& res)
+  {
+    write_on_ = req.write_on;
+    ROS_DEBUG_STREAM("handle_set_write_mode:" + (req.write_on == true) ? "ON" : "OFF");
   }
 };
 }

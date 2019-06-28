@@ -23,10 +23,16 @@ find_package(catkin REQUIRED COMPONENTS
 
 add_service_files(
    FILES
+   SetReadMode.srv
+   SetWriteMode.srv
    SetRequestedState.srv
    GetAxisError.srv
    GetCurrentState.srv
    GetVbusVoltage.srv
+   SetPosSetpoint.srv
+   SetVelSetpoint.srv
+   SetCurrentSetpoint.srv
+   MoveToPos.srv
 )
 
 generate_messages(

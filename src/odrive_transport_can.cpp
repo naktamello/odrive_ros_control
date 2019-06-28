@@ -3,8 +3,8 @@
  */
 // stl
 #include <iostream>
-#include <sstream>
 #include <mutex>
+#include <sstream>
 // linux
 #include <linux/can.h>
 #include <linux/can/raw.h>
@@ -24,7 +24,11 @@
 #include <odrive_ros_control/GetAxisError.h>
 #include <odrive_ros_control/GetCurrentState.h>
 #include <odrive_ros_control/GetVbusVoltage.h>
+#include <odrive_ros_control/MoveToPos.h>
+#include <odrive_ros_control/SetCurrentSetpoint.h>
+#include <odrive_ros_control/SetPosSetpoint.h>
 #include <odrive_ros_control/SetRequestedState.h>
+#include <odrive_ros_control/SetVelSetpoint.h>
 #include <odrive_ros_control/transport_interface.h>
 
 namespace odrive_ros_control
@@ -34,8 +38,12 @@ namespace transport
 namespace CanSimpleCommands
 {
 const int ODriveHeartbeatMessage = 0x001;
+const int SetAxisRequestedState = 0x007;
 const int GetEncoderEstimates = 0x009;
+const int MoveToPos = 0x00B;
 const int SetPosSetpoint = 0x00C;
+const int SetVelSetpoint = 0x00D;
+const int SetCurrentSetpoint = 0x00E;
 const int GetVbusVoltage = 0x017;
 }
 enum class Endianness
@@ -300,23 +308,37 @@ public:
         nh_ptr_->advertiseService("/odrive_ros_control/get_axis_error", &CanTransport::handle_get_axis_error, this));
     services_.push_back(nh_ptr_->advertiseService("/odrive_ros_control/get_vbus_voltage",
                                                   &CanTransport::handle_get_vbus_voltage, this));
+    services_.push_back(nh_ptr_->advertiseService("/odrive_ros_control/set_pos_setpoint",
+                                                  &CanTransport::handle_set_pos_setpoint, this));
+    services_.push_back(nh_ptr_->advertiseService("/odrive_ros_control/set_vel_setpoint",
+                                                  &CanTransport::handle_set_vel_setpoint, this));
+    services_.push_back(nh_ptr_->advertiseService("/odrive_ros_control/set_current_setpoint",
+                                                  &CanTransport::handle_set_current_setpoint, this));
+    services_.push_back(
+        nh_ptr_->advertiseService("/odrive_ros_control/move_to_pos", &CanTransport::handle_move_to_pos, this));
   }
 
   bool send(std::vector<double> &position_cmd, std::vector<double> &velocity_cmd)
   {
+    if (!write_on_)
+      return true;
     for (std::size_t i = 0; i < joint_names_.size(); ++i)
     {
       if (config_defined(config_mapping_, joint_names_[i]))
       {
         CanJointConfig *config = boost::any_cast<CanJointConfig>(&config_mapping_[joint_names_[i]]);
-        CanFrame can_frame = make_position_command(config->node_id, position_cmd[i], velocity_cmd[i]);
+        CanFrame can_frame = make_position_command(config->node_id, static_cast<int32_t>(position_cmd[i]),
+                                                   static_cast<int16_t>(velocity_cmd[i]));
         std::lock_guard<std::mutex> guard(can_mutex_);
         can_device_->write_async(can_frame);
       }
     }
+    return true;
   }
   bool receive(std::vector<double> &position, std::vector<double> &velocity)
   {
+    if (!read_on_)
+      return true;
     for (std::size_t i = 0; i < joint_names_.size(); ++i)
     {
       if (config_defined(config_mapping_, joint_names_[i]))
@@ -332,6 +354,7 @@ public:
         can_device_->write_async(can_frame);
       }
     }
+    return true;
   }
 
 private:
@@ -339,7 +362,6 @@ private:
   bool srv_ready_;
   std::mutex can_mutex_;
   uint32_t loop_cnt_;
-  std::vector<ros::ServiceServer> services_;
   std::unique_ptr<CanDevice> can_device_;
   CanSimpleSerializer serializer_;
   std::vector<JointState> joint_states_;
@@ -347,21 +369,44 @@ private:
   {
     CanJointConfig(){};
     CanJointConfig(int joint_idx_, std::array<double, 2> pos_vel_, int node_id_)
-      : JointConfig(joint_idx_, pos_vel_), node_id(node_id_), axis_state(-1), axis_error(-1)
+      : JointConfig(joint_idx_, pos_vel_), node_id(node_id_)
     {
     }
     int node_id;
-    int axis_state;
-    int axis_error;
   };
   ConfigMapping config_mapping_;
-  CanFrame make_position_command(int node_id, double &position, double &velocity)
+  CanFrame make_move_to_pos_command(int node_id, const int32_t &position)
+  {
+    CanFrame can_frame{};
+    can_frame.can_dlc = 8;
+    can_frame.can_id = (node_id << 5) | CanSimpleCommands::MoveToPos;
+    serializer_.serialize_int32(position, can_frame.data);
+    return can_frame;
+  }
+  CanFrame make_position_command(int node_id, const int32_t &position, const int16_t &velocity)
   {
     CanFrame can_frame{};
     can_frame.can_dlc = 8;
     can_frame.can_id = (node_id << 5) | CanSimpleCommands::SetPosSetpoint;
-    serializer_.serialize_int32(static_cast<int32_t>(position), static_cast<uint8_t *>(can_frame.data));
-    serializer_.serialize_int32(static_cast<int16_t>(velocity), static_cast<uint8_t *>(&can_frame.data[4]));
+    serializer_.serialize_int32(position, can_frame.data);
+    serializer_.serialize_int16(velocity, &can_frame.data[4]);
+    return can_frame;
+  }
+  CanFrame make_velocity_command(int node_id, const int32_t &velocity, const int16_t &current)
+  {
+    CanFrame can_frame{};
+    can_frame.can_dlc = 8;
+    can_frame.can_id = (node_id << 5) | CanSimpleCommands::SetVelSetpoint;
+    serializer_.serialize_int32(velocity, can_frame.data);
+    serializer_.serialize_int16(current, &can_frame.data[4]);
+    return can_frame;
+  }
+  CanFrame make_current_command(int node_id, const int32_t &current)
+  {
+    CanFrame can_frame{};
+    can_frame.can_dlc = 8;
+    can_frame.can_id = (node_id << 5) | CanSimpleCommands::SetCurrentSetpoint;
+    serializer_.serialize_int32(current, can_frame.data);
     return can_frame;
   }
   CanFrame make_feedback_command(int node_id)
@@ -378,6 +423,14 @@ private:
     can_frame.can_id = (node_id << 5) | CanSimpleCommands::GetVbusVoltage | (1 << 30);
     return can_frame;
   }
+  CanFrame make_set_requested_state_command(int node_id, uint8_t requested_state)
+  {
+    CanFrame can_frame{};
+    can_frame.can_dlc = 8;
+    can_frame.can_id = (node_id << 5) | CanSimpleCommands::SetAxisRequestedState;
+    serializer_.serialize_int32(static_cast<int32_t>(requested_state), static_cast<uint8_t *>(can_frame.data));
+    return can_frame;
+  }
 
   int joint_idx_from_node_id(int node_id)
   {
@@ -391,18 +444,18 @@ private:
 
   void can_rx_callback(CanFrame frame)
   {
-    int joint_idx = -1;
     int node_id = (frame.can_id >> 5) & 0x03F;
+    int joint_idx = joint_idx_from_node_id(node_id);
+    if (joint_idx == -1)
+      return;
     int cmd_id = frame.can_id & 0x01F;
     switch (cmd_id)
     {
       case CanSimpleCommands::ODriveHeartbeatMessage:
-        // TODO populate current state and error
+        joint_states_[joint_idx].axis_error = serializer_.deserialize_uint32(frame.data);
+        joint_states_[joint_idx].current_state = serializer_.deserialize_uint32(&frame.data[4]);
         break;
       case CanSimpleCommands::GetEncoderEstimates:
-        joint_idx = joint_idx_from_node_id(node_id);
-        if (joint_idx == -1)
-          break;
         joint_states_[joint_idx].position = static_cast<double>(serializer_.deserialize_float(frame.data));
         joint_states_[joint_idx].velocity = static_cast<double>(serializer_.deserialize_float(&frame.data[4]));
         if (!joint_states_[joint_idx].initialized)
@@ -420,6 +473,17 @@ private:
                                   odrive_ros_control::SetRequestedState::Response &res)
   {
     ROS_DEBUG_STREAM("handle_set_requested_state: " + req.joint_name);
+    if (config_defined(config_mapping_, req.joint_name))
+    {
+      CanJointConfig *config = boost::any_cast<CanJointConfig>(&config_mapping_[req.joint_name]);
+      std::lock_guard<std::mutex> guard(can_mutex_);
+      ros::Duration duration(0.01);
+      duration.sleep();
+      CanFrame can_frame = make_set_requested_state_command(config->node_id, req.axis_state);
+      can_device_->write_async(can_frame);
+      duration.sleep();
+    }
+    return true;
   }
 
   bool handle_get_current_state(odrive_ros_control::GetCurrentState::Request &req,
@@ -429,7 +493,7 @@ private:
     if (config_defined(config_mapping_, req.joint_name))
     {
       CanJointConfig *config = boost::any_cast<CanJointConfig>(&config_mapping_[req.joint_name]);
-      ROS_DEBUG_STREAM("current_state: " + std::to_string(config->axis_state));
+      res.axis_state = joint_states_[config->joint_idx].current_state;
     }
     return true;
   }
@@ -437,6 +501,80 @@ private:
   bool handle_get_axis_error(odrive_ros_control::GetAxisError::Request &req,
                              odrive_ros_control::GetAxisError::Response &res)
   {
+    ROS_DEBUG_STREAM("handle_get_axis_error");
+    if (config_defined(config_mapping_, req.joint_name))
+    {
+      CanJointConfig *config = boost::any_cast<CanJointConfig>(&config_mapping_[req.joint_name]);
+      res.axis_error = joint_states_[config->joint_idx].axis_error;
+    }
+    return true;
+  }
+
+  bool handle_set_pos_setpoint(odrive_ros_control::SetPosSetpoint::Request &req,
+                               odrive_ros_control::SetPosSetpoint::Response &res)
+  {
+    ROS_DEBUG_STREAM("handle_set_pos_setpoint: " + req.joint_name);
+    if (config_defined(config_mapping_, req.joint_name))
+    {
+      CanJointConfig *config = boost::any_cast<CanJointConfig>(&config_mapping_[req.joint_name]);
+      std::lock_guard<std::mutex> guard(can_mutex_);
+      ros::Duration duration(0.01);
+      duration.sleep();
+      CanFrame can_frame = make_position_command(config->node_id, req.pos_setpoint, req.vel_ff);
+      can_device_->write_async(can_frame);
+      duration.sleep();
+    }
+    return true;
+  }
+
+  bool handle_set_vel_setpoint(odrive_ros_control::SetVelSetpoint::Request &req,
+                               odrive_ros_control::SetVelSetpoint::Response &res)
+  {
+    ROS_DEBUG_STREAM("handle_set_vel_setpoint: " + req.joint_name);
+    if (config_defined(config_mapping_, req.joint_name))
+    {
+      CanJointConfig *config = boost::any_cast<CanJointConfig>(&config_mapping_[req.joint_name]);
+      std::lock_guard<std::mutex> guard(can_mutex_);
+      ros::Duration duration(0.01);
+      duration.sleep();
+      CanFrame can_frame = make_velocity_command(config->node_id, req.vel_setpoint, req.current_ff);
+      can_device_->write_async(can_frame);
+      duration.sleep();
+    }
+    return true;
+  }
+
+  bool handle_set_current_setpoint(odrive_ros_control::SetCurrentSetpoint::Request &req,
+                                   odrive_ros_control::SetCurrentSetpoint::Response &res)
+  {
+    ROS_DEBUG_STREAM("handle_set_current_setpoint: " + req.joint_name);
+    if (config_defined(config_mapping_, req.joint_name))
+    {
+      CanJointConfig *config = boost::any_cast<CanJointConfig>(&config_mapping_[req.joint_name]);
+      std::lock_guard<std::mutex> guard(can_mutex_);
+      ros::Duration duration(0.01);
+      duration.sleep();
+      CanFrame can_frame = make_current_command(config->node_id, req.current_setpoint);
+      can_device_->write_async(can_frame);
+      duration.sleep();
+    }
+    return true;
+  }
+
+  bool handle_move_to_pos(odrive_ros_control::MoveToPos::Request &req, odrive_ros_control::MoveToPos::Response &res)
+  {
+    ROS_DEBUG_STREAM("handle_move_to_pos: " + req.joint_name);
+    if (config_defined(config_mapping_, req.joint_name))
+    {
+      CanJointConfig *config = boost::any_cast<CanJointConfig>(&config_mapping_[req.joint_name]);
+      std::lock_guard<std::mutex> guard(can_mutex_);
+      ros::Duration duration(0.01);
+      duration.sleep();
+      CanFrame can_frame = make_move_to_pos_command(config->node_id, req.position);
+      can_device_->write_async(can_frame);
+      duration.sleep();
+    }
+    return true;
   }
 
   bool handle_get_vbus_voltage(odrive_ros_control::GetVbusVoltage::Request &req,
@@ -445,7 +583,6 @@ private:
     if (config_defined(config_mapping_, req.joint_name))
     {
       std::lock_guard<std::mutex> guard(can_mutex_);
-      ROS_DEBUG_STREAM("handle_get_vbus_voltage running...");
       ros::Duration duration(0.01);
       duration.sleep();  // this gives some time for ODrive to process CAN mailbox
       srv_ready_ = false;
@@ -453,14 +590,17 @@ private:
       CanJointConfig *config = boost::any_cast<CanJointConfig>(&config_mapping_[req.joint_name]);
       CanFrame can_frame = make_vbus_command(config->node_id);
       can_device_->write_async(can_frame);
-      while (true){
-        if (srv_ready_ == true){
+      while (true)
+      {
+        if (srv_ready_ == true)
+        {
           res.vbus_voltage = serializer_.deserialize_float(srv_data_);
           ROS_DEBUG_STREAM("vbus:" + std::to_string(res.vbus_voltage));
           res.result = "success";
           break;
         }
-        else if (i > 5){
+        else if (i > 5)
+        {
           break;
         }
         ROS_DEBUG_STREAM("handle_get_vbus_voltage loop:" + std::to_string(i));

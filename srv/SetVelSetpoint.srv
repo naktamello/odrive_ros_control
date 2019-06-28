@@ -1,0 +1,5 @@
+string joint_name
+int32 vel_setpoint
+int16 current_ff
+---
+string result

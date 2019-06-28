@@ -1,0 +1,4 @@
+string joint_name
+int32 current_setpoint
+---
+string result

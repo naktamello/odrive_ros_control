@@ -250,6 +250,7 @@ public:
         config->serial_object->device->write_buffer();
       }
     }
+    return true;
   }
   bool receive(std::vector<double>& position, std::vector<double>& velocity)
   {
@@ -272,6 +273,7 @@ public:
         }
       }
     }
+    return true;
   }
 
 private:
