@@ -25,6 +25,7 @@
 #include <odrive_ros_control/GetCurrentState.h>
 #include <odrive_ros_control/GetVbusVoltage.h>
 #include <odrive_ros_control/MoveToPos.h>
+#include <odrive_ros_control/ODriveRawCAN.h>
 #include <odrive_ros_control/SetCurrentSetpoint.h>
 #include <odrive_ros_control/SetPosSetpoint.h>
 #include <odrive_ros_control/SetRequestedState.h>
@@ -300,6 +301,8 @@ public:
       ROS_DEBUG_STREAM("initialized joint:" + joint_name);
       config_mapping_[joint_name] = CanJointConfig(static_cast<int>(i), { 0, 0 }, node_id);
     }
+    services_.push_back(
+        nh_ptr_->advertiseService("/odrive_ros_control/odrive_raw_can", &CanTransport::handle_odrive_raw_can, this));
     services_.push_back(nh_ptr_->advertiseService("/odrive_ros_control/set_requested_state",
                                                   &CanTransport::handle_set_requested_state, this));
     services_.push_back(nh_ptr_->advertiseService("/odrive_ros_control/get_current_state",
@@ -358,7 +361,14 @@ public:
   }
 
 private:
-  uint8_t srv_data_[8];
+  struct ODriveCanMsg
+  {
+    CanFrame frame;
+    int node_id;
+    int cmd_id;
+  };
+  struct ODriveCanMsg last_msg_;
+  // uint8_t srv_data_[8];
   bool srv_ready_;
   std::mutex can_mutex_;
   uint32_t loop_cnt_;
@@ -461,11 +471,16 @@ private:
         if (!joint_states_[joint_idx].initialized)
           joint_states_[joint_idx].initialized = true;
         break;
-      case CanSimpleCommands::GetVbusVoltage:
-        std::memcpy(srv_data_, frame.data, 8);
-        srv_ready_ = true;
-        break;
+      // case CanSimpleCommands::GetVbusVoltage:
+      //   std::memcpy(srv_data_, frame.data, 8);
+      //   srv_ready_ = true;
+      //   break;
       default:
+        std::memcpy(&last_msg_.frame, &frame, sizeof(CanFrame));
+        last_msg_.node_id = node_id;
+        last_msg_.cmd_id = cmd_id;
+        // std::memcpy(srv_data_, frame.data, 8);
+        srv_ready_ = true;
         break;
     }
   }
@@ -582,33 +597,46 @@ private:
   {
     if (config_defined(config_mapping_, req.joint_name))
     {
-      std::lock_guard<std::mutex> guard(can_mutex_);
-      ros::Duration duration(0.01);
-      duration.sleep();  // this gives some time for ODrive to process CAN mailbox
-      srv_ready_ = false;
-      int i = 0;
       CanJointConfig *config = boost::any_cast<CanJointConfig>(&config_mapping_[req.joint_name]);
       CanFrame can_frame = make_vbus_command(config->node_id);
-      can_device_->write_async(can_frame);
-      while (true)
+      if (wait_for_response(can_frame))
       {
-        if (srv_ready_ == true)
+        if (last_msg_.cmd_id == CanSimpleCommands::GetVbusVoltage)
         {
-          res.vbus_voltage = serializer_.deserialize_float(srv_data_);
+          res.vbus_voltage = serializer_.deserialize_float(last_msg_.frame.data);
           ROS_DEBUG_STREAM("vbus:" + std::to_string(res.vbus_voltage));
           res.result = "success";
-          break;
         }
-        else if (i > 5)
-        {
-          break;
-        }
-        ROS_DEBUG_STREAM("handle_get_vbus_voltage loop:" + std::to_string(i));
-        i++;
-        duration.sleep();
       }
     }
     return true;
+  }
+  bool handle_odrive_raw_can(odrive_ros_control::ODriveRawCAN::Request &req,
+                             odrive_ros_control::ODriveRawCAN::Response &res)
+  {
+    std::lock_guard<std::mutex> guard(can_mutex_);
+    ros::Duration duration(0.01);
+    duration.sleep();
+  }
+
+  using RawCANCallback = std::function<void(CanFrame can_frame)>;
+  bool wait_for_response(CanFrame &frame)
+  {
+    std::lock_guard<std::mutex> guard(can_mutex_);
+    ros::Duration duration(0.01);  // this gives some time for ODrive to process CAN mailbox
+    duration.sleep();
+    srv_ready_ = false;
+    can_device_->write_async(frame);
+    for (size_t i = 0; i < 5; ++i)
+    {
+      if (srv_ready_ == true)
+      {
+        return true;
+      }
+      ROS_DEBUG_STREAM("RawCANCallback loop:" + std::to_string(i));
+      duration.sleep();
+    }
+    return false;
   }
 };
 }

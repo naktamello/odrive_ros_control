@@ -1,0 +1,9 @@
+uint32 id
+uint8 dlc
+bool rtr
+uint8[8] data
+bool has_response
+uint16 timeout_ms
+---
+uint8[8] data
+string result
