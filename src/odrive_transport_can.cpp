@@ -367,6 +367,7 @@ private:
     int node_id;
     int cmd_id;
   };
+  static const int RTR_BIT = 30;
   struct ODriveCanMsg last_msg_;
   // uint8_t srv_data_[8];
   bool srv_ready_;
@@ -423,14 +424,14 @@ private:
   {
     CanFrame can_frame{};
     can_frame.can_dlc = 8;
-    can_frame.can_id = (node_id << 5) | CanSimpleCommands::GetEncoderEstimates | (1 << 30);
+    can_frame.can_id = (node_id << 5) | CanSimpleCommands::GetEncoderEstimates | (1 << RTR_BIT);
     return can_frame;
   }
   CanFrame make_vbus_command(int node_id)
   {
     CanFrame can_frame{};
     can_frame.can_dlc = 8;
-    can_frame.can_id = (node_id << 5) | CanSimpleCommands::GetVbusVoltage | (1 << 30);
+    can_frame.can_id = (node_id << 5) | CanSimpleCommands::GetVbusVoltage | (1 << RTR_BIT);
     return can_frame;
   }
   CanFrame make_set_requested_state_command(int node_id, uint8_t requested_state)
@@ -614,12 +615,31 @@ private:
   bool handle_odrive_raw_can(odrive_ros_control::ODriveRawCAN::Request &req,
                              odrive_ros_control::ODriveRawCAN::Response &res)
   {
+    ROS_DEBUG_STREAM("handle_odrive_raw_can");
+    CanFrame can_frame{};
+    can_frame.can_dlc = 8;
+    can_frame.can_id = req.id;
+    if (req.rtr)
+      can_frame.can_id |= (1 << RTR_BIT);
+    std::memcpy(can_frame.data, &req.data[0], 8);
+    if (req.has_response)
+      if (wait_for_response(can_frame)){
+        std::memcpy(&res.data[0], last_msg_.frame.data, 8);
+        ROS_DEBUG_STREAM("response received. node_id:" + std::to_string(last_msg_.node_id) +" cmd_id:" + std::to_string(last_msg_.cmd_id));
+      }
+    else
+      safe_write(can_frame);
+  }
+
+  void safe_write(CanFrame &frame)
+  {
     std::lock_guard<std::mutex> guard(can_mutex_);
-    ros::Duration duration(0.01);
+    ros::Duration duration(0.01);  // this gives some time for ODrive to process CAN mailbox
+    duration.sleep();
+    can_device_->write_async(frame);
     duration.sleep();
   }
 
-  using RawCANCallback = std::function<void(CanFrame can_frame)>;
   bool wait_for_response(CanFrame &frame)
   {
     std::lock_guard<std::mutex> guard(can_mutex_);
@@ -633,7 +653,7 @@ private:
       {
         return true;
       }
-      ROS_DEBUG_STREAM("RawCANCallback loop:" + std::to_string(i));
+      ROS_DEBUG_STREAM("wait_for_response loop:" + std::to_string(i));
       duration.sleep();
     }
     return false;
