@@ -37,8 +37,7 @@ public:
     }
     boost::asio::serial_port_base::baud_rate baud_option(baud);
     serial_port_->set_option(baud_option);
-    boost::thread t(boost::bind(&boost::asio::io_service::run, io_service_));
-    start_reading();
+    boost::thread t(boost::bind(&SerialDevice::start_thread, this));
   }
 
   ~SerialDevice(){
@@ -90,7 +89,6 @@ public:
     cb_service_.state = RequestState::IDLE;
     cb_service_.wait_count = 0;
     cb_service_.cb = nullptr;
-    start_reading();
   }
 
 private:
@@ -105,6 +103,12 @@ private:
     RequestState state;
     RequestCallback cb;
   };
+  void start_thread()
+  {
+    start_reading();
+    io_service_->run();
+  }
+
   void start_reading(void)
   {
     serial_port_->async_read_some(boost::asio::buffer(io_buffer_, max_read_length),
