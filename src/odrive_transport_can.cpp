@@ -180,9 +180,8 @@ public:
     result = ::bind(can_socket_, reinterpret_cast<struct sockaddr *>(&addr), sizeof(addr));
     if (result == -1)
       setup_error("error while binding to network interface");
-    socket_ = std::make_unique<boost::asio::posix::stream_descriptor>(*io_service_, can_socket_);
-    boost::thread t(boost::bind(&boost::asio::io_service::run, io_service_));
-    start_reading();
+    socket_ = std::make_shared<boost::asio::posix::stream_descriptor>(*io_service_, can_socket_);
+    boost::thread t(boost::bind(&CanDevice::start_thread, this));
   }
   ~CanDevice()
   {
@@ -190,6 +189,7 @@ public:
       ::close(can_socket_);
     io_service_->stop();
   }
+
   void write_async(CanFrame &frame)
   {
     boost::asio::async_write(*socket_, boost::asio::buffer(&frame, sizeof(frame)),
@@ -197,8 +197,17 @@ public:
   }
 
 private:
+  void start_thread()
+  {
+    start_reading();
+    io_service_->run();
+  }
+
   void start_reading()
   {
+    read(can_socket_, read_buffer_, read_length);
+    std::memcpy(&frame_, read_buffer_, read_length);
+    callback_(frame_);
     boost::asio::async_read(*socket_, boost::asio::buffer(read_buffer_, read_length),
                             boost::bind(&CanDevice::read_async_complete, this, boost::asio::placeholders::error,
                                         boost::asio::placeholders::bytes_transferred));
@@ -209,13 +218,14 @@ private:
     {
       std::memcpy(&frame_, read_buffer_, bytes_transferred);
       callback_(frame_);
-      // print_can_msg(frame_);
-      start_reading();
+      print_can_msg(frame_);
     }
     else
     {
+      ROS_DEBUG_STREAM("async_read error");
       std::cout << "read error!" << std::endl;
     }
+    start_reading();
   }
 
   void write_async_complete(const boost::system::error_code &error)
@@ -256,7 +266,7 @@ private:
   static const size_t read_length = sizeof(CanFrame);
   char read_buffer_[read_length] = { 0 };
   CanFrame frame_{};
-  std::unique_ptr<boost::asio::posix::stream_descriptor> socket_;
+  std::shared_ptr<boost::asio::posix::stream_descriptor> socket_;
   std::shared_ptr<boost::asio::io_service> io_service_;
   CanRxCallback callback_;
 };
@@ -623,12 +633,14 @@ private:
       can_frame.can_id |= (1 << RTR_BIT);
     std::memcpy(can_frame.data, &req.data[0], 8);
     if (req.has_response)
-      if (wait_for_response(can_frame)){
+      if (wait_for_response(can_frame))
+      {
         std::memcpy(&res.data[0], last_msg_.frame.data, 8);
-        ROS_DEBUG_STREAM("response received. node_id:" + std::to_string(last_msg_.node_id) +" cmd_id:" + std::to_string(last_msg_.cmd_id));
+        ROS_DEBUG_STREAM("response received. node_id:" + std::to_string(last_msg_.node_id) + " cmd_id:" +
+                         std::to_string(last_msg_.cmd_id));
       }
-    else
-      safe_write(can_frame);
+      else
+        safe_write(can_frame);
   }
 
   void safe_write(CanFrame &frame)
