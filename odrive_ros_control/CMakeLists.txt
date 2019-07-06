@@ -36,6 +36,7 @@ add_service_files(
    MoveToPos.srv
 )
 
+
 generate_messages(
    DEPENDENCIES
    std_msgs
@@ -78,15 +79,18 @@ include_directories(
 )
 
 add_library(odrive_hardware_interface src/odrive_hardware_interface.cpp)
+add_dependencies(odrive_hardware_interface odrive_ros_control_generate_messages_cpp)
 target_link_libraries(odrive_hardware_interface ${catkin_LIBRARIES} ${GAZEBO_LIBRARIES} ${Boost_LIBRARIES})
 
 add_library(odrive_hardware_sim src/odrive_hardware_sim.cpp)
 target_link_libraries(odrive_hardware_sim ${catkin_LIBRARIES} ${GAZEBO_LIBRARIES} ${Boost_LIBRARIES})
 
 add_library(odrive_transport_uart src/odrive_transport_uart.cpp)
+add_dependencies(odrive_transport_uart odrive_ros_control_generate_messages_cpp)
 target_link_libraries(odrive_transport_uart ${catkin_LIBRARIES} ${Boost_LIBRARIES})
 
 add_library(odrive_transport_can src/odrive_transport_can.cpp)
+add_dependencies(odrive_transport_can odrive_ros_control_generate_messages_cpp)
 target_link_libraries(odrive_transport_can ${catkin_LIBRARIES} ${Boost_LIBRARIES})
 
 add_executable(odrive_hardware_interface_node src/odrive_hardware_interface_node.cpp)
