@@ -43,6 +43,7 @@ generate_messages(
 
 catkin_package(
   CATKIN_DEPENDS
+    message_runtime
     gazebo_ros_control
     controller_manager
     hardware_interface
