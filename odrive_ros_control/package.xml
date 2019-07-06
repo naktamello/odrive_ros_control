@@ -40,6 +40,7 @@
   <depend>angles</depend>
   <depend>gazebo_ros_control</depend>
   <depend>industrial_robot_client</depend>
+  <depend>async_comm</depend>
   <export>
     <gazebo_ros_control plugin="${prefix}/odrive_hardware_sim_plugin.xml"/>
     <odrive_ros_control plugin="${prefix}/odrive_transport_plugin.xml"/>

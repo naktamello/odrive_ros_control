@@ -19,6 +19,7 @@ find_package(catkin REQUIRED COMPONENTS
   gazebo_dev
   simple_message
   message_generation
+  async_comm
 )
 
 add_service_files(
@@ -58,10 +59,12 @@ catkin_package(
     urdf
     angles
     industrial_robot_client
+    async_comm
   INCLUDE_DIRS
     include
+  DEPENDS
+    Boost
   LIBRARIES
-    ${PROJECT_NAME}
     odrive_hardware_interface
     odrive_hardware_sim
 )
@@ -73,7 +76,7 @@ add_definitions(-DLINUXSOCKETS=1)
 
 include_directories(
   include
-  ${Boost_INCLUDE_DIR}
+  ${Boost_INCLUDE_DIRS}
   ${catkin_INCLUDE_DIRS}
   ${GAZEBO_INCLUDE_DIRS}
 )
@@ -114,10 +117,8 @@ install(
 )
 
 
-install(
-  DIRECTORY include/
-  DESTINATION ${CATKIN_GLOBAL_INCLUDE_DESTINATION}
-  FILES_MATCHING PATTERN "*.h"
+install(DIRECTORY include/${PROJECT_NAME}/
+  DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
 )
 
 install(FILES odrive_hardware_sim_plugin.xml odrive_transport_plugin.xml
