@@ -218,7 +218,7 @@ private:
     {
       std::memcpy(&frame_, read_buffer_, bytes_transferred);
       callback_(frame_);
-      print_can_msg(frame_);
+      // print_can_msg(frame_);
     }
     else
     {
@@ -633,18 +633,23 @@ private:
       can_frame.can_id |= (1 << RTR_BIT);
     std::memcpy(can_frame.data, &req.data[0], 8);
     if (req.has_response)
+    {
       if (wait_for_response(can_frame))
       {
         std::memcpy(&res.data[0], last_msg_.frame.data, 8);
         ROS_DEBUG_STREAM("response received. node_id:" + std::to_string(last_msg_.node_id) + " cmd_id:" +
                          std::to_string(last_msg_.cmd_id));
+        return true;
       }
-      else
-        safe_write(can_frame);
+    }
+    else
+      safe_write(can_frame);
+    return true;
   }
 
   void safe_write(CanFrame &frame)
   {
+    ROS_DEBUG_STREAM("sending CanFrame");
     std::lock_guard<std::mutex> guard(can_mutex_);
     ros::Duration duration(0.01);  // this gives some time for ODrive to process CAN mailbox
     duration.sleep();
