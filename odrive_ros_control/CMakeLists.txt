@@ -22,6 +22,11 @@ find_package(catkin REQUIRED COMPONENTS
   async_comm
 )
 
+find_package(Boost REQUIRED COMPONENTS
+system
+thread
+)
+
 add_service_files(
    FILES
    ODriveRawCAN.srv
