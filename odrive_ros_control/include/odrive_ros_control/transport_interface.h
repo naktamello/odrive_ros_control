@@ -7,6 +7,7 @@
 // stl
 #include <string>
 #include <vector>
+#include <array>
 // boost
 #include <boost/algorithm/string.hpp>
 #include <boost/any.hpp>

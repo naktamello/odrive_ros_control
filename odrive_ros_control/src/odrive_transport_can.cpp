@@ -18,6 +18,8 @@
 #include <odrive_ros_control/SetRequestedState.h>
 #include <odrive_ros_control/SetVelSetpoint.h>
 #include <odrive_ros_control/transport_interface.h>
+#include <odrive_ros_control/can_simple_commands.h>
+#include <odrive_ros_control/can_simple_serializer.h>
 // async_comm
 #include <async_comm/async_can.h>
 using namespace async_comm;
@@ -26,120 +28,6 @@ namespace odrive_ros_control
 {
 namespace transport
 {
-namespace CanSimpleCommands
-{
-const int ODriveHeartbeatMessage = 0x001;
-const int SetAxisRequestedState = 0x007;
-const int GetEncoderEstimates = 0x009;
-const int MoveToPos = 0x00B;
-const int SetPosSetpoint = 0x00C;
-const int SetVelSetpoint = 0x00D;
-const int SetCurrentSetpoint = 0x00E;
-const int GetVbusVoltage = 0x017;
-}
-enum class Endianness
-{
-  LITTLE = 0,
-  BIG = 1
-};
-class CanSimpleSerializer
-{
-public:
-  CanSimpleSerializer()
-  {
-    static_assert(std::numeric_limits<float>::is_iec559, "float type is not IEEE754");
-    endian_ = byte_order();
-  }
-
-  template <typename T>
-  void serialize(const T &value, uint8_t *dst)
-  {
-    auto src = reinterpret_cast<const uint8_t *>(&value);
-    endian_copy(src, dst, sizeof(T));
-  }
-
-  template <typename T>
-  T deserialize(uint8_t *src)
-  {
-    T dst;
-    endian_copy(src, reinterpret_cast<uint8_t *>(&dst), sizeof(T));
-    return dst;
-  };
-
-  void serialize_float(const float &value, uint8_t *dst)
-  {
-    serialize(value, dst);
-  }
-
-  float deserialize_float(uint8_t *src)
-  {
-    return deserialize<float>(src);
-  }
-
-  void serialize_uint32(const uint32_t &value, uint8_t *dst)
-  {
-    serialize(value, dst);
-  }
-
-  uint32_t deserialize_uint32(uint8_t *src)
-  {
-    return deserialize<uint32_t>(src);
-  }
-
-  void serialize_int32(const int32_t &value, uint8_t *dst)
-  {
-    serialize(value, dst);
-  }
-
-  int32_t deserialize_int32(uint8_t *src)
-  {
-    return deserialize<int32_t>(src);
-  }
-
-  void serialize_uint16(const uint16_t &value, uint8_t *dst)
-  {
-    serialize(value, dst);
-  }
-
-  uint16_t deserialize_uint16(uint8_t *src)
-  {
-    return deserialize<uint16_t>(src);
-  }
-
-  void serialize_int16(const int16_t &value, uint8_t *dst)
-  {
-    serialize(value, dst);
-  }
-
-  int16_t deserialize_int16(uint8_t *src)
-  {
-    return deserialize<int16_t>(src);
-  }
-
-  void endian_copy(const uint8_t *src, uint8_t *dst, size_t size)
-  {
-    if (endian_ == Endianness::LITTLE)
-      std::memcpy(dst, src, size);
-    else
-    {
-      size_t offset = size - 1;
-      for (std::size_t i = 0; i < size; ++i)
-      {
-        *dst++ = *(src + offset--);
-      }
-    }
-  }
-
-  Endianness byte_order()
-  {
-    short int word = 0x00001;
-    char *b = (char *)&word;
-    return (b[0] ? Endianness::LITTLE : Endianness::BIG);
-  }
-
-private:
-  Endianness endian_;
-};
 
 class CanTransport : public CommandTransport
 {
@@ -247,7 +135,6 @@ private:
     int node_id;
     int cmd_id;
   };
-  static const int RTR_BIT = 30;
   struct ODriveCanMsg last_msg_;
   // uint8_t srv_data_[8];
   bool srv_ready_;
@@ -496,6 +383,7 @@ private:
                              odrive_ros_control::ODriveRawCAN::Response &res)
   {
     ROS_DEBUG_STREAM("handle_odrive_raw_can");
+    res.result = "success";
     CanFrame can_frame{};
     can_frame.can_dlc = 8;
     can_frame.can_id = req.id;
@@ -511,6 +399,8 @@ private:
                          std::to_string(last_msg_.cmd_id));
         return true;
       }
+      ROS_DEBUG_STREAM("no response returning false");
+      res.result = "timeout";
     }
     else
       safe_write(can_frame);
