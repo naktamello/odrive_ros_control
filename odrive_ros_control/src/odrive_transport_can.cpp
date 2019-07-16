@@ -167,7 +167,7 @@ private:
     can_frame.can_dlc = 8;
     can_frame.can_id = (node_id << 5) | CanSimpleCommands::SetPosSetpoint;
     serializer_.serialize_int32(position, can_frame.data);
-    serializer_.serialize_int16(velocity, &can_frame.data[4]);
+    serializer_.serialize_int16(velocity/100, &can_frame.data[4]);
     return can_frame;
   }
   CanFrame make_velocity_command(int node_id, const int32_t &velocity, const int16_t &current)
