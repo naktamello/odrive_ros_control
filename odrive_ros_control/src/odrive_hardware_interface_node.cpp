@@ -36,7 +36,6 @@ int main(int argc, char** argv)
   ros::NodeHandle hw_nh("odrive_hardware");
   odrive_hardware_interface.init(nh, hw_nh);
   controller_manager::ControllerManager controller_manager(&odrive_hardware_interface, nh);
-  odrive_hardware_interface.start();
 
   ros::Time timestamp;
   ros::Duration period;
