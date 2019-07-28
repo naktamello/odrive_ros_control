@@ -12,9 +12,11 @@
 
 namespace odrive_hardware_interface
 {
-ODriveHardwareInterface::ODriveHardwareInterface()
+
+bool ODriveHardwareInterface::init(ros::NodeHandle& root_nh, ros::NodeHandle& robot_hw_nh)
 {
-  if (!nh_.getParam("/odrive/hardware_interface/joints", joint_names_))
+  nh_ = std::make_shared<ros::NodeHandle>(robot_hw_nh);
+  if (!nh_->getParam("/odrive/hardware_interface/joints", joint_names_))
   {
     ROS_FATAL_STREAM_NAMED("odrive_ros_control", "You must load joint names to '/odrive/hardware_interface/joints' on "
                                                  "param server.");
@@ -32,7 +34,7 @@ ODriveHardwareInterface::ODriveHardwareInterface()
   hardware_velocity_.assign(n_dof_, 0.0);
   hardware_position_command_.assign(n_dof_, 0.0);
   hardware_velocity_command_.assign(n_dof_, 0.0);
-  if (nh_.getParam("/odrive/hardware_interface/multiplier", multiplier_))
+  if (nh_->getParam("/odrive/hardware_interface/multiplier", multiplier_))
   {
     if (multiplier_.size() != joint_names_.size())
     {
@@ -55,9 +57,7 @@ ODriveHardwareInterface::ODriveHardwareInterface()
   registerInterface(&posvel_joint_interface_);
 
   ROS_INFO_STREAM_NAMED("hardware_interface", "ODriveHardwareInterface loaded");
-}
-ODriveHardwareInterface::~ODriveHardwareInterface()
-{
+  return true;
 }
 
 bool ODriveHardwareInterface::read(const ros::Time time, const ros::Duration period)
@@ -102,14 +102,11 @@ void ODriveHardwareInterface::apply_multiplier(std::vector<double>& src, std::ve
   }
 }
 
-void ODriveHardwareInterface::configure()
-{
-}
 
 std::string ODriveHardwareInterface::get_transport_plugin()
 {
   std::string interface;
-  if (!nh_.getParam(odrive_ros_control::transport::param_prefix + "interface", interface))
+  if (!nh_->getParam(odrive_ros_control::transport::param_prefix + "interface", interface))
   {
     ROS_FATAL_STREAM_NAMED("odrive_ros_control", "you must define the interface type on the param server");
     ros::shutdown();
@@ -145,5 +142,4 @@ void ODriveHardwareInterface::start()
     ros::shutdown();
   }
 }
-
 }

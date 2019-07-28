@@ -32,7 +32,7 @@ class UartTransport : public CommandTransport
   static const int default_baud = 921600;
 
 public:
-  bool init_transport(ros::NodeHandle& nh, std::string param_namespace, std::vector<std::string>& joint_names)
+  bool init_transport(std::shared_ptr<ros::NodeHandle> nh, std::string param_namespace, std::vector<std::string>& joint_names)
   {
     CommandTransport::init_transport(nh, param_namespace, joint_names);
     // check each joint's config on param server

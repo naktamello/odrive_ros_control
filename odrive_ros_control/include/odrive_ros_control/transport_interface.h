@@ -60,11 +60,11 @@ const std::string param_prefix = "/odrive/transport/";
 class CommandTransport
 {
 public:
-  virtual bool init_transport(ros::NodeHandle& nh, std::string param_namespace, std::vector<std::string>& joint_names)
+  virtual bool init_transport(std::shared_ptr<ros::NodeHandle> nh, std::string param_namespace, std::vector<std::string>& joint_names)
   {
     read_on_ = false;
     write_on_ = false;
-    nh_ptr_ = std::make_shared<ros::NodeHandle>(nh);
+    nh_ptr_ = nh;
     nh_ptr_->getParam(param_prefix + "interface", transport_type_);
     std::transform(transport_type_.begin(), transport_type_.end(), transport_type_.begin(), ::tolower);
     param_namespace_ = param_namespace;
@@ -102,6 +102,7 @@ protected:
                                     odrive_ros_control::SetReadMode::Response& res)
   {
     read_on_ = req.read_on;
+    res.result = "success";
     ROS_DEBUG_STREAM("handle_set_read_mode:" + (req.read_on == true) ? "ON" : "OFF");
   }
   virtual bool handle_set_write_mode(odrive_ros_control::SetWriteMode::Request& req,

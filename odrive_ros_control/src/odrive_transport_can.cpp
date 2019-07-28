@@ -17,9 +17,9 @@
 #include <odrive_ros_control/SetPosSetpoint.h>
 #include <odrive_ros_control/SetRequestedState.h>
 #include <odrive_ros_control/SetVelSetpoint.h>
-#include <odrive_ros_control/transport_interface.h>
 #include <odrive_ros_control/can_simple_commands.h>
 #include <odrive_ros_control/can_simple_serializer.h>
+#include <odrive_ros_control/transport_interface.h>
 // async_comm
 #include <async_comm/async_can.h>
 using namespace async_comm;
@@ -28,7 +28,6 @@ namespace odrive_ros_control
 {
 namespace transport
 {
-
 class CanTransport : public CommandTransport
 {
   using CommandTransport::init_transport;
@@ -38,7 +37,7 @@ public:
   {
   }
 
-  bool init_transport(ros::NodeHandle &nh, std::string param_namespace, std::vector<std::string> &joint_names)
+  bool init_transport(std::shared_ptr<ros::NodeHandle> nh, std::string param_namespace, std::vector<std::string> &joint_names)
   {
     CommandTransport::init_transport(nh, param_namespace, joint_names);
     ROS_DEBUG_STREAM("CanTransport::init_transport()");
@@ -99,7 +98,7 @@ public:
       {
         CanJointConfig *config = boost::any_cast<CanJointConfig>(&config_mapping_[joint_names_[i]]);
         CanFrame can_frame = make_position_command(config->node_id, static_cast<int32_t>(position_cmd[i]),
-                                                   static_cast<int16_t>(velocity_cmd[i]));
+                                                   static_cast<int32_t>(velocity_cmd[i]));
         std::lock_guard<std::mutex> guard(can_mutex_);
         can_device_->write_async(can_frame);
       }
@@ -161,13 +160,13 @@ private:
     serializer_.serialize_int32(position, can_frame.data);
     return can_frame;
   }
-  CanFrame make_position_command(int node_id, const int32_t &position, const int16_t &velocity)
+  CanFrame make_position_command(int node_id, const int32_t &position, const int32_t &velocity)
   {
     CanFrame can_frame{};
     can_frame.can_dlc = 8;
     can_frame.can_id = (node_id << 5) | CanSimpleCommands::SetPosSetpoint;
     serializer_.serialize_int32(position, can_frame.data);
-    serializer_.serialize_int16(velocity/100, &can_frame.data[4]);
+    serializer_.serialize_int16(velocity / 100, &can_frame.data[4]);
     return can_frame;
   }
   CanFrame make_velocity_command(int node_id, const int32_t &velocity, const int16_t &current)

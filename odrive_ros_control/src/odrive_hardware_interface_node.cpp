@@ -9,21 +9,6 @@
 
 static const double default_loop_rate = 0.01;  // 10ms
 
-bool handle_set_requested_state(odrive_ros_control::SetRequestedState::Request& req,
-                                odrive_ros_control::SetRequestedState::Response& res)
-{
-  ROS_DEBUG_STREAM("handle_set_requested_state: " + req.joint_name);
-}
-
-bool handle_get_current_state(odrive_ros_control::GetCurrentState::Request& req,
-                              odrive_ros_control::GetCurrentState::Response& res)
-{
-}
-
-bool handle_get_axis_error(odrive_ros_control::GetAxisError::Request& req,
-                           odrive_ros_control::GetAxisError::Response& res)
-{
-}
 
 int main(int argc, char** argv)
 {
@@ -48,13 +33,9 @@ int main(int argc, char** argv)
   ros::AsyncSpinner spinner(2);
   spinner.start();
 
-//   ros::ServiceServer service1 =
-    //   nh.advertiseService("/odrive_ros_control/set_requested_state", handle_set_requested_state);
-//   ros::ServiceServer service2 = nh.advertiseService("/odrive_ros_control/get_current_state", handle_get_current_state);
-//   ros::ServiceServer service3 = nh.advertiseService("/odrive_ros_control/get_axis_error", handle_get_axis_error);
-
   odrive_hardware_interface::ODriveHardwareInterface odrive_hardware_interface;
-  odrive_hardware_interface.configure();
+  ros::NodeHandle hw_nh("odrive_hardware");
+  odrive_hardware_interface.init(nh, hw_nh);
   controller_manager::ControllerManager controller_manager(&odrive_hardware_interface, nh);
   odrive_hardware_interface.start();
 
