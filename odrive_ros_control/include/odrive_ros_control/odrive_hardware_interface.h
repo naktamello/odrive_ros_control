@@ -17,6 +17,7 @@
 #include <hardware_interface/robot_hw.h>
 #include <odrive_ros_control/transport_interface.h>
 #include <pluginlib/class_loader.h>
+#include <pluginlib/class_list_macros.h>
 #include <realtime_tools/realtime_publisher.h>
 #include <ros/ros.h>
 #include <std_msgs/String.h>
@@ -28,9 +29,9 @@ class ODriveHardwareInterface : public hardware_interface::RobotHW
 {
 public:
   void start();
-  bool init(ros::NodeHandle& root_nh, ros::NodeHandle& robot_hw_nh);
-  bool read(const ros::Time time, const ros::Duration period);
-  bool write(const ros::Time time, const ros::Duration period);
+  virtual bool init(ros::NodeHandle& root_nh, ros::NodeHandle& robot_hw_nh);
+  virtual void read(const ros::Time& time, const ros::Duration& period);
+  virtual void write(const ros::Time& time, const ros::Duration& period);
 
 protected:
   std::shared_ptr<ros::NodeHandle> nh_;

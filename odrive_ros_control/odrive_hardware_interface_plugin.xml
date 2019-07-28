@@ -1,0 +1,10 @@
+<library path="lib/libodrive_hardware_interface">
+
+  <class name="odrive_hardware_interface/ODriveHardwareInterface"
+  type="odrive_hardware_interface::ODriveHardwareInterface"
+  base_class_type="hardware_interface::RobotHW">
+    <description>
+      RobotHW interface for odrive_ros_control
+    </description>
+  </class>
+</library>

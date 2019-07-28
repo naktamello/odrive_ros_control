@@ -126,6 +126,6 @@ install(DIRECTORY include/${PROJECT_NAME}/
   DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
 )
 
-install(FILES odrive_hardware_sim_plugin.xml odrive_transport_plugin.xml
+install(FILES odrive_hardware_sim_plugin.xml odrive_transport_plugin.xml odrive_hardware_interface_plugin.xml
   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
 )

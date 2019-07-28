@@ -9,7 +9,6 @@
 
 static const double default_loop_rate = 0.01;  // 10ms
 
-
 int main(int argc, char** argv)
 {
   ROS_INFO_STREAM_NAMED("hardware_interface", "Starting odrive_hardware_interface node");
@@ -51,11 +50,7 @@ int main(int argc, char** argv)
 
   while (ros::ok())
   {
-    if (!odrive_hardware_interface.read(timestamp, period))
-    {
-      ROS_FATAL_NAMED("odrive_hardware_interface", "Failed to read from RobotHW");
-      ros::shutdown();
-    }
+    odrive_hardware_interface.read(timestamp, period);
 
     timestamp = ros::Time::now();
     stopwatch_now = std::chrono::steady_clock::now();

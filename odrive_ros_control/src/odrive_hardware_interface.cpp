@@ -56,11 +56,12 @@ bool ODriveHardwareInterface::init(ros::NodeHandle& root_nh, ros::NodeHandle& ro
   registerInterface(&joint_state_interface_);
   registerInterface(&posvel_joint_interface_);
 
+  start();
   ROS_INFO_STREAM_NAMED("hardware_interface", "ODriveHardwareInterface loaded");
   return true;
 }
 
-bool ODriveHardwareInterface::read(const ros::Time time, const ros::Duration period)
+void ODriveHardwareInterface::read(const ros::Time& time, const ros::Duration& period)
 {
   if (use_multiplier_)
   {
@@ -72,10 +73,9 @@ bool ODriveHardwareInterface::read(const ros::Time time, const ros::Duration per
   {
     command_transport_->receive(joint_position_, joint_velocity_);
   }
-  return true;
 }
 
-bool ODriveHardwareInterface::write(const ros::Time time, const ros::Duration period)
+void ODriveHardwareInterface::write(const ros::Time& time, const ros::Duration& period)
 {
   if (use_multiplier_)
   {
@@ -87,7 +87,6 @@ bool ODriveHardwareInterface::write(const ros::Time time, const ros::Duration pe
   {
     command_transport_->send(joint_position_command_, joint_velocity_command_);
   }
-  return true;
 }
 
 void ODriveHardwareInterface::apply_multiplier(std::vector<double>& src, std::vector<double>& dst, bool divide)
@@ -143,3 +142,4 @@ void ODriveHardwareInterface::start()
   }
 }
 }
+PLUGINLIB_EXPORT_CLASS(odrive_hardware_interface::ODriveHardwareInterface, hardware_interface::RobotHW)
