@@ -4,7 +4,6 @@ project(odrive_ros_control)
 add_compile_options(-std=c++14)
 
 find_package(catkin REQUIRED COMPONENTS
-  cmake_modules
   controller_manager
   hardware_interface
   joint_limits_interface
@@ -21,6 +20,7 @@ find_package(catkin REQUIRED COMPONENTS
   message_generation
   async_comm
 )
+
 
 find_package(Boost REQUIRED COMPONENTS
 system

@@ -1,3 +1,5 @@
+#include <iostream>
+#include <numeric>
 #include <boost/asio.hpp>
 #include <boost/asio/serial_port.hpp>
 #include <boost/bind.hpp>

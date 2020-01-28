@@ -43,7 +43,6 @@
   <depend>async_comm</depend>
   <depend>combined_robot_hw</depend>
   <build_export_depend>boost</build_export_depend>
-  <build_export_depend>odrive_hardware_interface</build_export_depend>
   <export>
     <gazebo_ros_control plugin="${prefix}/odrive_hardware_sim_plugin.xml"/>
     <odrive_ros_control plugin="${prefix}/odrive_transport_plugin.xml"/>
