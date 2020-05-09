@@ -37,7 +37,8 @@ public:
   {
   }
 
-  bool init_transport(std::shared_ptr<ros::NodeHandle> nh, std::string param_namespace, std::vector<std::string> &joint_names)
+  bool init_transport(std::shared_ptr<ros::NodeHandle> nh, std::string param_namespace,
+                      std::vector<std::string> &joint_names)
   {
     CommandTransport::init_transport(nh, param_namespace, joint_names);
     ROS_DEBUG_STREAM("CanTransport::init_transport()");
@@ -116,12 +117,15 @@ public:
         CanJointConfig *config = boost::any_cast<CanJointConfig>(&config_mapping_[joint_names_[i]]);
         if (joint_states_[i].initialized)
         {
+          // std::cout<<"recv:"<<joint_names_[i]<<"+"<< joint_states_[i].position <<std::endl;
           position[i] = joint_states_[i].position;
           velocity[i] = joint_states_[i].velocity;
         }
         CanFrame can_frame = make_feedback_command(config->node_id);
         std::lock_guard<std::mutex> guard(can_mutex_);
         can_device_->write_async(can_frame);
+        ros::Duration duration(0.001);
+        duration.sleep();
       }
     }
     return true;
@@ -225,6 +229,7 @@ private:
     int joint_idx = joint_idx_from_node_id(node_id);
     if (joint_idx == -1)
       return;
+    // std::cout<<"can_rx:"<<joint_idx<<std::endl;
     int cmd_id = frame.can_id & 0x01F;
     switch (cmd_id)
     {
@@ -394,8 +399,8 @@ private:
       if (wait_for_response(can_frame))
       {
         std::memcpy(&res.data[0], last_msg_.frame.data, 8);
-        ROS_DEBUG_STREAM("response received. node_id:" + std::to_string(last_msg_.node_id) + " cmd_id:" +
-                         std::to_string(last_msg_.cmd_id));
+        ROS_DEBUG_STREAM("response received. node_id:" + std::to_string(last_msg_.node_id) +
+                         " cmd_id:" + std::to_string(last_msg_.cmd_id));
         return true;
       }
       ROS_DEBUG_STREAM("no response returning false");
@@ -435,7 +440,7 @@ private:
     return false;
   }
 };
-}
-}
+}  // namespace transport
+}  // namespace odrive_ros_control
 
 PLUGINLIB_EXPORT_CLASS(odrive_ros_control::transport::CanTransport, odrive_ros_control::transport::CommandTransport)

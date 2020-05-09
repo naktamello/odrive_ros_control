@@ -1,5 +1,4 @@
 <library path="lib/libodrive_transport_uart">
-
   <class name="odrive_ros_control/UartTransport" type="odrive_ros_control::transport::UartTransport" base_class_type="odrive_ros_control::transport::CommandTransport">
     <description>
       UART transport plugin for odrive_ros_control.
@@ -7,7 +6,6 @@
   </class>
 </library>
 <library path="lib/libodrive_transport_can">
-
   <class name="odrive_ros_control/CanTransport" type="odrive_ros_control::transport::CanTransport" base_class_type="odrive_ros_control::transport::CommandTransport">
     <description>
       CAN transport plugin for odrive_ros_control.

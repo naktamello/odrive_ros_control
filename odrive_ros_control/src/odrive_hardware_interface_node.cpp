@@ -50,7 +50,6 @@ int main(int argc, char** argv)
   while (ros::ok())
   {
     odrive_hardware_interface.read(timestamp, period);
-
     timestamp = ros::Time::now();
     stopwatch_now = std::chrono::steady_clock::now();
     period.fromSec(std::chrono::duration_cast<std::chrono::duration<double>>(stopwatch_now - stopwatch_last).count());
