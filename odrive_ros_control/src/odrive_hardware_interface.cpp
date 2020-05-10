@@ -12,7 +12,6 @@
 
 namespace odrive_hardware_interface
 {
-
 bool ODriveHardwareInterface::init(ros::NodeHandle& root_nh, ros::NodeHandle& robot_hw_nh)
 {
   nh_ = std::make_shared<ros::NodeHandle>(robot_hw_nh);
@@ -22,6 +21,14 @@ bool ODriveHardwareInterface::init(ros::NodeHandle& root_nh, ros::NodeHandle& ro
                                                  "param server.");
     ros::shutdown();
   }
+  if (!nh_->getParam("/odrive/hardware_interface/interface_type", interface_type_))
+  {
+    ROS_FATAL_STREAM_NAMED("odrive_ros_control", "You must load ros_control interface type to "
+                                                 "'/odrive/hardware_interface/interface_type' on "
+                                                 "param server. (one of the following: [ 'pos_vel', 'velocity' ] )");
+    ros::shutdown();
+  }
+  ROS_DEBUG_STREAM_NAMED("odrive_ros_control", "initializing interface type: " << interface_type_);
   n_dof_ = joint_names_.size();
   joint_position_.assign(n_dof_, 0.0);
   joint_velocity_.assign(n_dof_, 0.0);
@@ -49,12 +56,32 @@ bool ODriveHardwareInterface::init(ros::NodeHandle& root_nh, ros::NodeHandle& ro
   {
     joint_state_interface_.registerHandle(hardware_interface::JointStateHandle(joint_names_[i], &joint_position_[i],
                                                                                &joint_velocity_[i], &joint_effort_[i]));
-    posvel_joint_interface_.registerHandle(hardware_interface::PosVelJointHandle(
-        joint_state_interface_.getHandle(joint_names_[i]), &joint_position_command_[i], &joint_velocity_command_[i]));
   }
-
   registerInterface(&joint_state_interface_);
-  registerInterface(&posvel_joint_interface_);
+  if (interface_type_ == "pos_vel")
+  {
+    for (std::size_t i = 0; i < n_dof_; ++i)
+    {
+      posvel_joint_interface_.registerHandle(hardware_interface::PosVelJointHandle(
+          joint_state_interface_.getHandle(joint_names_[i]), &joint_position_command_[i], &joint_velocity_command_[i]));
+    }
+
+    registerInterface(&posvel_joint_interface_);
+  }
+  else if (interface_type_ == "velocity")
+  {
+    for (std::size_t i = 0; i < n_dof_; ++i)
+    {
+      velocity_joint_interface_.registerHandle(hardware_interface::JointHandle(
+          joint_state_interface_.getHandle(joint_names_[i]), &joint_velocity_command_[i]));
+    }
+    registerInterface(&velocity_joint_interface_);
+  }
+  else
+  {
+    ROS_FATAL_STREAM_NAMED("odrive_ros_control", "unsupported interface type: " << interface_type_);
+    ros::shutdown();
+  }
 
   start();
   ROS_INFO_STREAM_NAMED("hardware_interface", "ODriveHardwareInterface loaded");
@@ -81,11 +108,25 @@ void ODriveHardwareInterface::write(const ros::Time& time, const ros::Duration& 
   {
     apply_multiplier(joint_position_command_, hardware_position_command_, false);
     apply_multiplier(joint_velocity_command_, hardware_velocity_command_, false);
-    command_transport_->send(hardware_position_command_, hardware_velocity_command_);
+    if (interface_type_ == "pos_vel")
+    {
+      command_transport_->send(hardware_position_command_, hardware_velocity_command_);
+    }
+    else if (interface_type_ == "velocity")
+    {
+      command_transport_->send(hardware_velocity_command_);
+    }
   }
   else
   {
-    command_transport_->send(joint_position_command_, joint_velocity_command_);
+    if (interface_type_ == "pos_vel")
+    {
+      command_transport_->send(joint_position_command_, joint_velocity_command_);
+    }
+    else if (interface_type_ == "velocity")
+    {
+      command_transport_->send(joint_velocity_command_);
+    }
   }
 }
 
@@ -100,7 +141,6 @@ void ODriveHardwareInterface::apply_multiplier(std::vector<double>& src, std::ve
     std::transform(src.begin(), src.end(), multiplier_.begin(), dst.begin(), std::divides<double>());
   }
 }
-
 
 std::string ODriveHardwareInterface::get_transport_plugin()
 {
@@ -128,8 +168,13 @@ void ODriveHardwareInterface::start()
   {
     // TODO robot namespace
 
-    transport_loader_.reset(new pluginlib::ClassLoader<odrive_ros_control::transport::CommandTransport>(
-        "odrive_ros_control", "odrive_ros_control::transport::CommandTransport"));
+    transport_loader_.reset(new pluginlib::ClassLoader<odrive_ros_control::transport::CommandTransport>("odrive_ros_"
+                                                                                                        "control",
+                                                                                                        "odrive_ros_"
+                                                                                                        "control::"
+                                                                                                        "transport::"
+                                                                                                        "CommandTrans"
+                                                                                                        "port"));
     command_transport_ =
         transport_loader_->createInstance(std::forward<std::string>(ODriveHardwareInterface::get_transport_plugin()));
     command_transport_->init_transport(nh_, "", joint_names_);
@@ -141,5 +186,5 @@ void ODriveHardwareInterface::start()
     ros::shutdown();
   }
 }
-}
+}  // namespace odrive_hardware_interface
 PLUGINLIB_EXPORT_CLASS(odrive_hardware_interface::ODriveHardwareInterface, hardware_interface::RobotHW)

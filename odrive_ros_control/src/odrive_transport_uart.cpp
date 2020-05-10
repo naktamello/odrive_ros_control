@@ -24,15 +24,14 @@ namespace odrive_ros_control
 {
 namespace transport
 {
-
-
 class UartTransport : public CommandTransport
 {
   using CommandTransport::init_transport;
   static const int default_baud = 921600;
 
 public:
-  bool init_transport(std::shared_ptr<ros::NodeHandle> nh, std::string param_namespace, std::vector<std::string>& joint_names)
+  bool init_transport(std::shared_ptr<ros::NodeHandle> nh, std::string param_namespace,
+                      std::vector<std::string>& joint_names)
   {
     CommandTransport::init_transport(nh, param_namespace, joint_names);
     // check each joint's config on param server
@@ -65,8 +64,8 @@ public:
       }
       if (serial_mapping_.find(port) == serial_mapping_.end())
       {
-        serial_mapping_[port] = { std::make_shared<SerialDevice>(baud, port, static_cast<int>(AxisNumber::NUM_AXES)), std::vector<AxisNumber>(),
-                                  AxisNumber::NONE };
+        serial_mapping_[port] = { std::make_shared<SerialDevice>(baud, port, static_cast<int>(AxisNumber::NUM_AXES)),
+                                  std::vector<AxisNumber>(), AxisNumber::NONE };
       }
       serial_mapping_[port].active_axes.push_back(static_cast<AxisNumber>(axis_number));
       config_mapping_[joint_name] = UartJointConfig(static_cast<int>(i), { 0, 0 }, port,
@@ -89,13 +88,17 @@ public:
         // ROS_DEBUG_STREAM("loading:" +
         //                  boost::str(pos_cmd_fmt_ % static_cast<int>(config_mapping_[joint_names_[i]].axis) %
         //                             truncate_small(position_cmd[i]) % truncate_small(velocity_cmd[i])));
-        config->serial_object->device->load_buffer(boost::str(pos_cmd_fmt_ % static_cast<int>(config->axis) %
-                                                              truncate_small(position_cmd[i]) %
-                                                              truncate_small(velocity_cmd[i])));
+        config->serial_object->device->load_buffer(
+            boost::str(pos_cmd_fmt_ % static_cast<int>(config->axis) % truncate_small(position_cmd[i]) %
+                       truncate_small(velocity_cmd[i])));
         config->serial_object->device->write_buffer();
       }
     }
     return true;
+  }
+  bool send(std::vector<double>& velocity_cmd)
+  {
+    ROS_WARN_STREAM("velocity interface is not yet supported with UART!");
   }
   bool receive(std::vector<double>& position, std::vector<double>& velocity)
   {
@@ -141,7 +144,7 @@ private:
     SerialObject* serial_object;
   };
   using PosVel = std::array<double*, 2>;
-  
+
   boost::unordered_map<std::string, SerialObject> serial_mapping_;
   ConfigMapping config_mapping_;
   std::shared_ptr<boost::asio::io_service> io_service_;
@@ -199,7 +202,7 @@ private:
     }
   }
 };
-}
-}
+}  // namespace transport
+}  // namespace odrive_ros_control
 
 PLUGINLIB_EXPORT_CLASS(odrive_ros_control::transport::UartTransport, odrive_ros_control::transport::CommandTransport)

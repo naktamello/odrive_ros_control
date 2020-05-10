@@ -81,6 +81,7 @@ public:
   {
   }
   virtual bool send(std::vector<double>& position_cmd, std::vector<double>& velocity_cmd) = 0;
+  virtual bool send(std::vector<double>& velocity_cmd) = 0;
   virtual bool receive(std::vector<double>& position, std::vector<double>& velocity) = 0;
 
 protected:

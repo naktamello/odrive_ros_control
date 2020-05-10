@@ -106,6 +106,22 @@ public:
     }
     return true;
   }
+  bool send(std::vector<double> &velocity_cmd)
+  {
+    if (!write_on_)
+      return true;
+    for (std::size_t i = 0; i < joint_names_.size(); ++i)
+    {
+      if (config_defined(config_mapping_, joint_names_[i]))
+      {
+        CanJointConfig *config = boost::any_cast<CanJointConfig>(&config_mapping_[joint_names_[i]]);
+        CanFrame can_frame = make_velocity_command(config->node_id, static_cast<int32_t>(velocity_cmd[i]), 0);
+        std::lock_guard<std::mutex> guard(can_mutex_);
+        can_device_->write_async(can_frame);
+      }
+    }
+    return true;
+  }
   bool receive(std::vector<double> &position, std::vector<double> &velocity)
   {
     if (!read_on_)
