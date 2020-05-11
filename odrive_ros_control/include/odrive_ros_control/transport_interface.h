@@ -1,6 +1,8 @@
 /*
  * Author: naktamello
  */
+#ifndef TRANSPORT_INTERFACE_
+#define TRANSPORT_INTERFACE_
 // ros
 #include <pluginlib/class_list_macros.h>
 #include <ros/ros.h>
@@ -65,7 +67,7 @@ public:
     read_on_ = false;
     write_on_ = false;
     nh_ptr_ = nh;
-    nh_ptr_->getParam(param_prefix + "interface", transport_type_);
+    nh_ptr_->getParam(param_namespace + param_prefix + "transport_type", transport_type_);
     std::transform(transport_type_.begin(), transport_type_.end(), transport_type_.begin(), ::tolower);
     param_namespace_ = param_namespace;
     param_path_ = param_namespace_ + param_prefix + transport_type_ + "/";
@@ -115,3 +117,4 @@ protected:
 };
 }
 }
+#endif

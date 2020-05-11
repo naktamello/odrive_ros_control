@@ -51,7 +51,7 @@ public:
     std::string device_name;
     if (!nh_ptr_->getParam(param_path_ + "device_name", device_name))
     {
-      ROS_FATAL_STREAM("you must provide can device name--i.e. 'slcan0'--in the param server!");
+      ROS_FATAL_STREAM("you must provide can device name--i.e. 'slcan0'--in the param server!" << param_path_);
       ros::shutdown();
     }
     can_device_ = std::make_unique<CanDevice>(device_name,

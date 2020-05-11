@@ -1,3 +1,5 @@
+#ifndef CAN_SIMPLE_SERIALIZER_
+#define CAN_SIMPLE_SERIALIZER_
 #include <limits>
 #include <stdint.h>
 
@@ -111,3 +113,5 @@ private:
 };
 }
 }
+
+#endif

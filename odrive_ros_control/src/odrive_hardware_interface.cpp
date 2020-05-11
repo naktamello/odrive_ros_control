@@ -15,16 +15,17 @@ namespace odrive_hardware_interface
 bool ODriveHardwareInterface::init(ros::NodeHandle& root_nh, ros::NodeHandle& robot_hw_nh)
 {
   nh_ = std::make_shared<ros::NodeHandle>(robot_hw_nh);
-  if (!nh_->getParam("/odrive/hardware_interface/joints", joint_names_))
+  namespace_ = ros::this_node::getNamespace();
+  if (!nh_->getParam(namespace_+ "/odrive/hardware_interface/joints", joint_names_))
   {
-    ROS_FATAL_STREAM_NAMED("odrive_ros_control", "You must load joint names to '/odrive/hardware_interface/joints' on "
+    ROS_FATAL_STREAM_NAMED("odrive_ros_control", "You must load joint names to 'odrive/hardware_interface/joints' on "
                                                  "param server.");
     ros::shutdown();
   }
-  if (!nh_->getParam("/odrive/hardware_interface/interface_type", interface_type_))
+  if (!nh_->getParam(namespace_+ "/odrive/hardware_interface/interface_type", interface_type_))
   {
     ROS_FATAL_STREAM_NAMED("odrive_ros_control", "You must load ros_control interface type to "
-                                                 "'/odrive/hardware_interface/interface_type' on "
+                                                 "'odrive/hardware_interface/interface_type' on "
                                                  "param server. (one of the following: [ 'pos_vel', 'velocity' ] )");
     ros::shutdown();
   }
@@ -41,7 +42,7 @@ bool ODriveHardwareInterface::init(ros::NodeHandle& root_nh, ros::NodeHandle& ro
   hardware_velocity_.assign(n_dof_, 0.0);
   hardware_position_command_.assign(n_dof_, 0.0);
   hardware_velocity_command_.assign(n_dof_, 0.0);
-  if (nh_->getParam("/odrive/hardware_interface/multiplier", multiplier_))
+  if (nh_->getParam(namespace_+ "/odrive/hardware_interface/multiplier", multiplier_))
   {
     if (multiplier_.size() != joint_names_.size())
     {
@@ -144,20 +145,20 @@ void ODriveHardwareInterface::apply_multiplier(std::vector<double>& src, std::ve
 
 std::string ODriveHardwareInterface::get_transport_plugin()
 {
-  std::string interface;
-  if (!nh_->getParam(odrive_ros_control::transport::param_prefix + "interface", interface))
+  std::string transport_type;
+  if (!nh_->getParam(namespace_ + odrive_ros_control::transport::param_prefix + "transport_type", transport_type))
   {
-    ROS_FATAL_STREAM_NAMED("odrive_ros_control", "you must define the interface type on the param server");
+    ROS_FATAL_STREAM_NAMED("odrive_ros_control", "you must define the transport type on the param server");
     ros::shutdown();
   };
-  std::transform(interface.begin(), interface.end(), interface.begin(), ::tolower);
-  if (interface == "uart")
+  std::transform(transport_type.begin(), transport_type.end(), transport_type.begin(), ::tolower);
+  if (transport_type == "uart")
     return "odrive_ros_control/UartTransport";
-  else if (interface == "can")
+  else if (transport_type == "can")
     return "odrive_ros_control/CanTransport";
   else
   {
-    ROS_FATAL_STREAM_NAMED("odrive_ros_control", "unknown transport interface: " << interface);
+    ROS_FATAL_STREAM_NAMED("odrive_ros_control", "unknown transport interface: " << transport_type);
     ros::shutdown();
   }
 }
@@ -177,7 +178,7 @@ void ODriveHardwareInterface::start()
                                                                                                         "port"));
     command_transport_ =
         transport_loader_->createInstance(std::forward<std::string>(ODriveHardwareInterface::get_transport_plugin()));
-    command_transport_->init_transport(nh_, "", joint_names_);
+    command_transport_->init_transport(nh_, namespace_, joint_names_);
     ROS_DEBUG_STREAM("CommandTransport loaded");
   }
   catch (pluginlib::LibraryLoadException& ex)

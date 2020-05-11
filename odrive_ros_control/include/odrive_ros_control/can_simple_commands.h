@@ -1,3 +1,5 @@
+#ifndef CAN_SIMPLE_COMMANDS_
+#define CAN_SIMPLE_COMMANDS_
 namespace odrive_ros_control
 {
 namespace transport
@@ -12,6 +14,7 @@ const int SetPosSetpoint = 0x00C;
 const int SetVelSetpoint = 0x00D;
 const int SetCurrentSetpoint = 0x00E;
 const int GetVbusVoltage = 0x017;
-}
-}
-}
+}  // namespace CanSimpleCommands
+}  // namespace transport
+}  // namespace odrive_ros_control
+#endif

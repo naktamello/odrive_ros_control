@@ -35,6 +35,7 @@ public:
 
 protected:
   std::shared_ptr<ros::NodeHandle> nh_;
+  std::string namespace_;
   unsigned int n_dof_;
   std::vector<std::string> joint_names_;
   std::string interface_type_;
