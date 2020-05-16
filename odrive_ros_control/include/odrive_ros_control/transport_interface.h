@@ -19,6 +19,7 @@
 #include <odrive_ros_control/SetReadMode.h>
 #include <odrive_ros_control/SetWriteMode.h>
 
+
 namespace odrive_ros_control
 {
 enum class AxisNumber
@@ -75,9 +76,9 @@ public:
     position_.resize(joint_names_.size());
 
     services_.push_back(
-        nh_ptr_->advertiseService("/odrive_ros_control/set_read_mode", &CommandTransport::handle_set_read_mode, this));
+        nh_ptr_->advertiseService(param_namespace+"/odrive_ros_control/set_read_mode", &CommandTransport::handle_set_read_mode, this));
     services_.push_back(
-        nh_ptr_->advertiseService("/odrive_ros_control/set_write_mode", &CommandTransport::handle_set_write_mode, this));
+        nh_ptr_->advertiseService(param_namespace+"/odrive_ros_control/set_write_mode", &CommandTransport::handle_set_write_mode, this));
   };
   virtual ~CommandTransport()
   {

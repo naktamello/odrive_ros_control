@@ -12,6 +12,9 @@ CanDevice::CanDevice(std::string device_name, CanRxCallback cb) : device_name_(d
   struct ifreq ifr
   {
   };
+  try
+  {
+
   int result;
   can_socket_ = ::socket(PF_CAN, SOCK_RAW, CAN_RAW);
   if (can_socket_ == -1)
@@ -29,7 +32,12 @@ CanDevice::CanDevice(std::string device_name, CanRxCallback cb) : device_name_(d
   if (result == -1)
     setup_error("error while binding to network interface");
   socket_ = std::make_shared<boost::asio::posix::stream_descriptor>(*io_service_, can_socket_);
-  boost::thread t(boost::bind(&CanDevice::start_thread, this));
+  boost::thread t(boost::bind(&CanDevice::start_thread, this));}
+  catch(std::exception& ex){
+    std::cout << "uncaught exception:" << ex.what() << std::endl;
+    setup_error("uncaught exception");
+    raise(SIGTERM);
+  }
 }
 CanDevice::~CanDevice()
 {
@@ -70,7 +78,7 @@ void CanDevice::read_async_complete(const boost::system::error_code &error, size
   }
   else
   {
-    std::cout << "read error!" << std::endl;
+    std::cout << "read error!:" << error << std::endl;
   }
   start_reading();
 }
@@ -101,6 +109,7 @@ void CanDevice::print_can_msg(CanFrame &frame)
 
 void CanDevice::setup_error(const std::string &msg)
 {
+  std::cout << "setup error:" << msg << std::endl;
   if (can_socket_ != -1)
     ::close(can_socket_);
 }

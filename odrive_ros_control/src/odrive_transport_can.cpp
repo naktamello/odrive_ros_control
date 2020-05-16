@@ -69,24 +69,24 @@ public:
       ROS_DEBUG_STREAM("initialized joint:" + joint_name);
       config_mapping_[joint_name] = CanJointConfig(static_cast<int>(i), { 0, 0 }, node_id);
     }
-    services_.push_back(
-        nh_ptr_->advertiseService("/odrive_ros_control/odrive_raw_can", &CanTransport::handle_odrive_raw_can, this));
-    services_.push_back(nh_ptr_->advertiseService("/odrive_ros_control/set_requested_state",
+    services_.push_back(nh_ptr_->advertiseService(param_namespace + "/odrive_ros_control/odrive_raw_can",
+                                                  &CanTransport::handle_odrive_raw_can, this));
+    services_.push_back(nh_ptr_->advertiseService(param_namespace + "/odrive_ros_control/set_requested_state",
                                                   &CanTransport::handle_set_requested_state, this));
-    services_.push_back(nh_ptr_->advertiseService("/odrive_ros_control/get_current_state",
+    services_.push_back(nh_ptr_->advertiseService(param_namespace + "/odrive_ros_control/get_current_state",
                                                   &CanTransport::handle_get_current_state, this));
-    services_.push_back(
-        nh_ptr_->advertiseService("/odrive_ros_control/get_axis_error", &CanTransport::handle_get_axis_error, this));
-    services_.push_back(nh_ptr_->advertiseService("/odrive_ros_control/get_vbus_voltage",
+    services_.push_back(nh_ptr_->advertiseService(param_namespace + "/odrive_ros_control/get_axis_error",
+                                                  &CanTransport::handle_get_axis_error, this));
+    services_.push_back(nh_ptr_->advertiseService(param_namespace + "/odrive_ros_control/get_vbus_voltage",
                                                   &CanTransport::handle_get_vbus_voltage, this));
-    services_.push_back(nh_ptr_->advertiseService("/odrive_ros_control/set_pos_setpoint",
+    services_.push_back(nh_ptr_->advertiseService(param_namespace + "/odrive_ros_control/set_pos_setpoint",
                                                   &CanTransport::handle_set_pos_setpoint, this));
-    services_.push_back(nh_ptr_->advertiseService("/odrive_ros_control/set_vel_setpoint",
+    services_.push_back(nh_ptr_->advertiseService(param_namespace + "/odrive_ros_control/set_vel_setpoint",
                                                   &CanTransport::handle_set_vel_setpoint, this));
-    services_.push_back(nh_ptr_->advertiseService("/odrive_ros_control/set_current_setpoint",
+    services_.push_back(nh_ptr_->advertiseService(param_namespace + "/odrive_ros_control/set_current_setpoint",
                                                   &CanTransport::handle_set_current_setpoint, this));
-    services_.push_back(
-        nh_ptr_->advertiseService("/odrive_ros_control/move_to_pos", &CanTransport::handle_move_to_pos, this));
+    services_.push_back(nh_ptr_->advertiseService(param_namespace + "/odrive_ros_control/move_to_pos",
+                                                  &CanTransport::handle_move_to_pos, this));
   }
 
   bool send(std::vector<double> &position_cmd, std::vector<double> &velocity_cmd)
@@ -245,7 +245,6 @@ private:
     int joint_idx = joint_idx_from_node_id(node_id);
     if (joint_idx == -1)
       return;
-    // std::cout<<"can_rx:"<<joint_idx<<std::endl;
     int cmd_id = frame.can_id & 0x01F;
     switch (cmd_id)
     {
@@ -259,15 +258,12 @@ private:
         if (!joint_states_[joint_idx].initialized)
           joint_states_[joint_idx].initialized = true;
         break;
-      // case CanSimpleCommands::GetVbusVoltage:
-      //   std::memcpy(srv_data_, frame.data, 8);
-      //   srv_ready_ = true;
-      //   break;
       default:
         std::memcpy(&last_msg_.frame, &frame, sizeof(CanFrame));
         last_msg_.node_id = node_id;
         last_msg_.cmd_id = cmd_id;
         // std::memcpy(srv_data_, frame.data, 8);
+        std::cout << "srv ready:" << node_id << "/" << cmd_id << std::endl;
         srv_ready_ = true;
         break;
     }
@@ -402,23 +398,29 @@ private:
   bool handle_odrive_raw_can(odrive_ros_control::ODriveRawCAN::Request &req,
                              odrive_ros_control::ODriveRawCAN::Response &res)
   {
-    ROS_DEBUG_STREAM("handle_odrive_raw_can");
     res.result = "success";
     CanFrame can_frame{};
     can_frame.can_dlc = 8;
     can_frame.can_id = req.id;
+    size_t retries = 5;
     if (req.rtr)
       can_frame.can_id |= (1 << RTR_BIT);
     std::memcpy(can_frame.data, &req.data[0], 8);
+    ROS_DEBUG_STREAM("handle_odrive_raw_can:" << req.id);
     if (req.has_response)
     {
-      if (wait_for_response(can_frame))
+      for (size_t i = 0; i < retries; ++i)
       {
-        std::memcpy(&res.data[0], last_msg_.frame.data, 8);
-        ROS_DEBUG_STREAM("response received. node_id:" + std::to_string(last_msg_.node_id) +
-                         " cmd_id:" + std::to_string(last_msg_.cmd_id));
-        return true;
+        ROS_DEBUG_STREAM("retries:" << i << "/" << retries);
+        if (wait_for_response(can_frame))
+        {
+          std::memcpy(&res.data[0], last_msg_.frame.data, 8);
+          ROS_DEBUG_STREAM("response received. node_id:" + std::to_string(last_msg_.node_id) +
+                           " cmd_id:" + std::to_string(last_msg_.cmd_id));
+          return true;
+        }
       }
+
       ROS_DEBUG_STREAM("no response returning false");
       res.result = "timeout";
     }
@@ -440,8 +442,7 @@ private:
   bool wait_for_response(CanFrame &frame)
   {
     std::lock_guard<std::mutex> guard(can_mutex_);
-    ros::Duration duration(0.01);  // this gives some time for ODrive to process CAN mailbox
-    duration.sleep();
+    ros::Duration duration(0.001);  // this gives some time for ODrive to process CAN mailbox
     srv_ready_ = false;
     can_device_->write_async(frame);
     for (size_t i = 0; i < 5; ++i)
@@ -453,6 +454,7 @@ private:
       ROS_DEBUG_STREAM("wait_for_response loop:" + std::to_string(i));
       duration.sleep();
     }
+    // ROS_DEBUG_STREAM()
     return false;
   }
 };
