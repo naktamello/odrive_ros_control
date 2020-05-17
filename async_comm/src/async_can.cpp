@@ -79,6 +79,9 @@ void CanDevice::read_async_complete(const boost::system::error_code &error, size
   else
   {
     std::cout << "read error!:" << error << std::endl;
+    // #define	ENETDOWN	100	/* Network is down */
+    // #define	ENODEV		19	/* No such device */
+
   }
   start_reading();
 }
