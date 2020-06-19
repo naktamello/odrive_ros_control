@@ -34,6 +34,7 @@ private:
   void write_async_complete(const boost::system::error_code &error);
   void print_can_msg(CanFrame &frame);
   void setup_error(const std::string &msg);
+  void open_socket();
 
   int can_socket_;
   std::string device_name_;

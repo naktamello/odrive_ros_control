@@ -1,49 +1,67 @@
 #include <async_comm/async_can.h>
 
-
 namespace async_comm
 {
 CanDevice::CanDevice(std::string device_name, CanRxCallback cb) : device_name_(device_name), callback_(cb)
 {
-  io_service_ = std::make_shared<boost::asio::io_service>();
-  struct sockaddr_can addr
-  {
-  };
-  struct ifreq ifr
-  {
-  };
-  try
-  {
-
-  int result;
-  can_socket_ = ::socket(PF_CAN, SOCK_RAW, CAN_RAW);
-  if (can_socket_ == -1)
-    setup_error("error opening CAN_RAW socket");
-  int enable = 1;
-  result = ::setsockopt(can_socket_, SOL_CAN_RAW, CAN_RAW_FD_FRAMES, &enable, sizeof(enable));
-  if (result == -1)
-    setup_error("error in setsockopt");
-  std::strncpy(ifr.ifr_name, device_name_.c_str(), IFNAMSIZ);
-  if (::ioctl(can_socket_, SIOCGIFINDEX, &ifr) == -1)
-    setup_error("error in ioctl");
-  addr.can_family = AF_CAN;
-  addr.can_ifindex = ifr.ifr_ifindex;
-  result = ::bind(can_socket_, reinterpret_cast<struct sockaddr *>(&addr), sizeof(addr));
-  if (result == -1)
-    setup_error("error while binding to network interface");
-  socket_ = std::make_shared<boost::asio::posix::stream_descriptor>(*io_service_, can_socket_);
-  boost::thread t(boost::bind(&CanDevice::start_thread, this));}
-  catch(std::exception& ex){
-    std::cout << "uncaught exception:" << ex.what() << std::endl;
-    setup_error("uncaught exception");
-    raise(SIGTERM);
-  }
+  open_socket();
 }
 CanDevice::~CanDevice()
 {
   if (can_socket_ != -1)
     ::close(can_socket_);
   io_service_->stop();
+}
+
+void CanDevice::open_socket()
+{
+  try
+  {
+    io_service_ = std::make_shared<boost::asio::io_service>();
+    struct sockaddr_can addr
+    {
+    };
+    struct ifreq ifr
+    {
+    };
+    int result;
+
+    if (can_socket_ != -1)
+      ::close(can_socket_);
+    can_socket_ = ::socket(PF_CAN, SOCK_RAW, CAN_RAW);
+    if (can_socket_ == -1)
+    {
+      setup_error("error opening CAN_RAW socket");
+      return;
+    }
+    int enable = 1;
+    result = ::setsockopt(can_socket_, SOL_CAN_RAW, CAN_RAW_FD_FRAMES, &enable, sizeof(enable));
+    if (result == -1)
+    {
+      setup_error("error in setsockopt");
+      return;
+    }
+    std::strncpy(ifr.ifr_name, device_name_.c_str(), IFNAMSIZ);
+    if (::ioctl(can_socket_, SIOCGIFINDEX, &ifr) == -1)
+    {
+      setup_error("error in ioctl");
+      ::close(can_socket_);
+      return;
+    }
+    addr.can_family = AF_CAN;
+    addr.can_ifindex = ifr.ifr_ifindex;
+    result = ::bind(can_socket_, reinterpret_cast<struct sockaddr *>(&addr), sizeof(addr));
+    if (result == -1)
+    {
+      setup_error("error while binding to network interface");
+      return;
+    }
+    socket_ = std::make_shared<boost::asio::posix::stream_descriptor>(*io_service_, can_socket_);
+    boost::thread t(boost::bind(&CanDevice::start_thread, this));
+  }
+  catch (std::exception &ex)
+  {
+  }
 }
 
 void CanDevice::write_async(CanFrame &frame)
@@ -79,9 +97,9 @@ void CanDevice::read_async_complete(const boost::system::error_code &error, size
   else
   {
     std::cout << "read error!:" << error << std::endl;
+    open_socket();
     // #define	ENETDOWN	100	/* Network is down */
     // #define	ENODEV		19	/* No such device */
-
   }
   start_reading();
 }
@@ -116,4 +134,4 @@ void CanDevice::setup_error(const std::string &msg)
   if (can_socket_ != -1)
     ::close(can_socket_);
 }
-}
+}  // namespace async_comm
