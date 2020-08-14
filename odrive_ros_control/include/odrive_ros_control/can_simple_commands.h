@@ -14,6 +14,7 @@ const int SetPosSetpoint = 0x00C;
 const int SetVelSetpoint = 0x00D;
 const int SetCurrentSetpoint = 0x00E;
 const int GetVbusVoltage = 0x017;
+const int ClearErrors = 0x018;
 }  // namespace CanSimpleCommands
 }  // namespace transport
 }  // namespace odrive_ros_control

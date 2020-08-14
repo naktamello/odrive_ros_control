@@ -33,6 +33,7 @@ add_service_files(
    SetReadMode.srv
    SetWriteMode.srv
    SetRequestedState.srv
+   ClearErrors.srv
    GetAxisError.srv
    GetCurrentState.srv
    GetVbusVoltage.srv
