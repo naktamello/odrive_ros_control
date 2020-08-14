@@ -8,6 +8,7 @@
 #include <boost/any.hpp>
 #include <boost/format.hpp>
 // odrive_ros_control
+#include <odrive_ros_control/ClearErrors.h>
 #include <odrive_ros_control/GetAxisError.h>
 #include <odrive_ros_control/GetCurrentState.h>
 #include <odrive_ros_control/GetVbusVoltage.h>
@@ -75,6 +76,8 @@ public:
                                                   &CanTransport::handle_set_requested_state, this));
     services_.push_back(nh_ptr_->advertiseService(param_namespace + "/odrive_ros_control/get_current_state",
                                                   &CanTransport::handle_get_current_state, this));
+    services_.push_back(nh_ptr_->advertiseService(param_namespace + "/odrive_ros_control/clear_errors",
+                                                  &CanTransport::handle_clear_errors, this));
     services_.push_back(nh_ptr_->advertiseService(param_namespace + "/odrive_ros_control/get_axis_error",
                                                   &CanTransport::handle_get_axis_error, this));
     services_.push_back(nh_ptr_->advertiseService(param_namespace + "/odrive_ros_control/get_vbus_voltage",
@@ -213,6 +216,13 @@ private:
     can_frame.can_id = (node_id << 5) | CanSimpleCommands::GetEncoderEstimates | (1 << RTR_BIT);
     return can_frame;
   }
+  CanFrame make_clear_errors_command(int node_id)
+  {
+    CanFrame can_frame{};
+    can_frame.can_dlc = 8;
+    can_frame.can_id = (node_id << 5) | CanSimpleCommands::ClearErrors;
+    return can_frame;
+  }
   CanFrame make_vbus_command(int node_id)
   {
     CanFrame can_frame{};
@@ -281,8 +291,9 @@ private:
       CanFrame can_frame = make_set_requested_state_command(config->node_id, req.axis_state);
       can_device_->write_async(can_frame);
       duration.sleep();
+      return true;
     }
-    return true;
+    return false;
   }
 
   bool handle_get_current_state(odrive_ros_control::GetCurrentState::Request &req,
@@ -293,8 +304,24 @@ private:
     {
       CanJointConfig *config = boost::any_cast<CanJointConfig>(&config_mapping_[req.joint_name]);
       res.axis_state = joint_states_[config->joint_idx].current_state;
+      return true;
     }
-    return true;
+    return false;
+  }
+
+  bool handle_clear_errors(odrive_ros_control::ClearErrors::Request &req,
+                          odrive_ros_control::ClearErrors::Response &res)
+  {
+    ROS_DEBUG_STREAM("handle_clear_errors");
+    if (config_defined(config_mapping_, req.joint_name))
+    {
+      CanJointConfig *config = boost::any_cast<CanJointConfig>(&config_mapping_[req.joint_name]);
+      CanFrame can_frame = make_clear_errors_command(config->node_id);
+      can_device_->write_async(can_frame);
+      return true;
+    }
+    return false;
+
   }
 
   bool handle_get_axis_error(odrive_ros_control::GetAxisError::Request &req,
@@ -305,8 +332,9 @@ private:
     {
       CanJointConfig *config = boost::any_cast<CanJointConfig>(&config_mapping_[req.joint_name]);
       res.axis_error = joint_states_[config->joint_idx].axis_error;
+      return true;
     }
-    return true;
+    return false;
   }
 
   bool handle_set_pos_setpoint(odrive_ros_control::SetPosSetpoint::Request &req,
@@ -322,8 +350,9 @@ private:
       CanFrame can_frame = make_position_command(config->node_id, req.pos_setpoint, req.vel_ff);
       can_device_->write_async(can_frame);
       duration.sleep();
+      return true;
     }
-    return true;
+    return false;
   }
 
   bool handle_set_vel_setpoint(odrive_ros_control::SetVelSetpoint::Request &req,
@@ -339,8 +368,9 @@ private:
       CanFrame can_frame = make_velocity_command(config->node_id, req.vel_setpoint, req.current_ff);
       can_device_->write_async(can_frame);
       duration.sleep();
+      return true;
     }
-    return true;
+    return false;
   }
 
   bool handle_set_current_setpoint(odrive_ros_control::SetCurrentSetpoint::Request &req,
@@ -356,8 +386,9 @@ private:
       CanFrame can_frame = make_current_command(config->node_id, req.current_setpoint);
       can_device_->write_async(can_frame);
       duration.sleep();
+      return true;
     }
-    return true;
+    return false;
   }
 
   bool handle_move_to_pos(odrive_ros_control::MoveToPos::Request &req, odrive_ros_control::MoveToPos::Response &res)
@@ -372,8 +403,9 @@ private:
       CanFrame can_frame = make_move_to_pos_command(config->node_id, req.position);
       can_device_->write_async(can_frame);
       duration.sleep();
+      return true;
     }
-    return true;
+    return false;
   }
 
   bool handle_get_vbus_voltage(odrive_ros_control::GetVbusVoltage::Request &req,
@@ -392,8 +424,9 @@ private:
           res.result = "success";
         }
       }
+      return true;
     }
-    return true;
+    return false;
   }
   bool handle_odrive_raw_can(odrive_ros_control::ODriveRawCAN::Request &req,
                              odrive_ros_control::ODriveRawCAN::Response &res)
@@ -454,7 +487,6 @@ private:
       ROS_DEBUG_STREAM("wait_for_response loop:" + std::to_string(i));
       duration.sleep();
     }
-    // ROS_DEBUG_STREAM()
     return false;
   }
 };
