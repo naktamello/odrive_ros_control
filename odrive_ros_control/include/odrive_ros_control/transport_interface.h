@@ -113,6 +113,7 @@ protected:
                                      odrive_ros_control::SetWriteMode::Response& res)
   {
     write_on_ = req.write_on;
+    res.result = "success";
     ROS_DEBUG_STREAM("handle_set_write_mode:" + (req.write_on == true) ? "ON" : "OFF");
   }
 };
